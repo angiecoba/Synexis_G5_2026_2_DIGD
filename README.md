@@ -255,30 +255,43 @@ Las dos se arreglarían con embeddings. **No se ajustó el sistema para estas 10
 | **Gradio** | Librería de Python que convierte funciones en una página web: chat, pestañas, gráficos, tablas. | `app.py`. También crea el enlace «Usar vía API», para que otros programas consulten la app. |
 | **Render** | Servidor en la nube que instala las librerías, arranca `python app.py` y le da una dirección pública. | Plan gratuito: 512 MB de memoria. Cada `git push` a `main` vuelve a publicar la app sola, en 2 a 3 minutos. Las claves del LLM se guardan en el panel de Render, nunca en el código. |
 
-**Por qué Render y no Hugging Face Spaces:** nadie del equipo tiene cuenta de Hugging Face. El enlace temporal de Gradio (`share=True`) dura 72 horas y no sirve para producción.
+**Por qué Render y no Hugging Face Spaces:** nadie del equipo tiene cuenta de Hugging Face.
+
+**Por qué no el enlace rápido de Gradio (`share=True`):** Gradio puede generar un enlace temporal (del tipo `https://abc123.gradio.live`) para mostrar una app que corre en tu propio computador. Sirve para una prueba rápida, pero tiene tres problemas:
+- caduca a las 72 horas;
+- solo funciona mientras ese computador esté prendido y con el programa abierto;
+- la dirección cambia cada vez.
+
+Render, en cambio, deja la app en un servidor en internet con una dirección fija, que funciona aunque todos los computadores del equipo estén apagados.
 
 ## 11. Tiempos de respuesta
 
 Hay dos tiempos distintos: **despertar el servidor** y **responder una pregunta**.
 
-| Situación | Tiempo aproximado |
+| Situación | Tiempo |
 |---|---|
 | Primera visita después de 15 minutos sin uso (el servidor gratuito estaba dormido) | **50 segundos o más** (aviso de Render) |
-| Abrir la página con el servidor despierto | 2 a 5 s (descarga la interfaz y los gráficos) |
+| Conectarse con el servidor despierto | ~3 s (medido) |
 
-| Tipo de pregunta | Cálculo en el servidor (medido en local) | Lo que ve la persona (estimado en Render gratuito) |
+**Medición real de la app publicada** (21-nov-2026, desde Bogotá, con el servidor despierto; mediana de 3 intentos por tipo):
+
+| Tipo de pregunta | Tiempo medido | Cálculo dentro del servidor (medido en local) |
 |---|---|---|
-| Concepto, fuera de alcance | < 0,01 s | menos de 1 s |
-| Contexto (notas de campo) | ~0,01 s | ~1 s |
-| Cálculo (hora pico) | ~0,03 s | ~1 s |
-| Mapa, gráfica de horas, tipos de vehículo | 0,04 a 0,07 s | 1 a 3 s (incluye dibujar el gráfico) |
-| Comparación por año, mes o temporada | 0,04 a 0,08 s | 1 a 3 s |
-| «¿Cómo estará?» (modelo + desglose) | ~0,07 s | 1 a 3 s |
-| Con LLM activado (preguntas de contexto) | + el tiempo del proveedor | + 1 a 5 s |
+| Concepto (glosario) | 1,2 s | < 0,01 s |
+| Fuera de alcance | 1,2 s | < 0,01 s |
+| Contexto (notas de campo) | 1,2 s | ~0,01 s |
+| Cálculo (hora pico) | 1,2 s | ~0,03 s |
+| Mapa | 1,2 s | ~0,04 s |
+| Gráfica de horas | 1,1 s | ~0,06 s |
+| Tipos de vehículo | 1,3 s | ~0,06 s |
+| Comparación por año | 1,1 s | ~0,04 s |
 
-Los tiempos «en local» se midieron con `time.perf_counter` en un computador de 2 núcleos. El plan gratuito de Render tiene mucha menos capacidad de procesamiento, y a eso se suman la red y el navegador; por eso la segunda columna es una **estimación**. Para medir la app real desde cualquier computador:
+**Cómo leerlo:** todas las preguntas tardan lo mismo, alrededor de **1 segundo**. Casi todo ese tiempo es el viaje de ida y vuelta por internet hasta el servidor de Render y la cola de Gradio, no el cálculo, que toma centésimas de segundo. A ese segundo se suma un poco más para dibujar los gráficos en el navegador. Si se activa el LLM, las preguntas de contexto tardarían además lo que tarde el proveedor (estimado: 1 a 5 s más). No incluye «¿Cómo estará?» ni «Explorar un punto», que en local también calculan en menos de 0,1 s.
+
+Para repetir la medición desde cualquier computador:
 
 ```bash
+pip install gradio_client
 python scripts/medir_tiempos.py https://bogota-se-mueve.onrender.com
 ```
 

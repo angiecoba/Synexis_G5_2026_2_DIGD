@@ -43,7 +43,7 @@ Para medir el modelo, lo entrenamos con los conteos de 2021 a 2025 y lo probamos
 
 ## ¿Cuánto tarda en responder?
 - **Si nadie ha usado la herramienta en los últimos 15 minutos**, la primera visita puede tardar **un minuto o más**: el servidor gratuito se estaba «durmiendo».
-- **Después**, la mayoría de respuestas llegan en **1 a 3 segundos**. Las que traen gráfico tardan un poco más.
+- **Después**, las respuestas llegan en **alrededor de 1 segundo** (medido el 21 de noviembre de 2026). Las que traen gráfico tardan un poco más en dibujarse.
 
 ## ¿Se puede usar en el celular?
 Sí, desde el navegador del teléfono, sin instalar nada. Los gráficos se ven más pequeños: puedes girar el teléfono o hacer zoom con dos dedos. Para ver la cifra exacta de una barra, tócala. Las tablas anchas se desplazan hacia el lado.

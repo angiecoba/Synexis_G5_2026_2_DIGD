@@ -1,0 +1,181 @@
+diff --git a/README.md b/README.md
+index d151d72..7eda27d 100644
+--- a/README.md
++++ b/README.md
+@@ -30,6 +30,7 @@ src/bsm/
+   modelo.py          modelo + rival + métricas  ->  python -m bsm.modelo
+   preparar_app.py    carpeta liviana de la app  ->  python -m bsm.preparar_app
+   rag.py             enrutador, búsqueda con cita y LLM opcional
++  evaluar.py         califica el asistente con evaluacion/preguntas.csv -> python -m bsm.evaluar
+ app.py               app Gradio (Asistente · Explorar · Predecir · Calidad · Acerca de)
+ tests/               reglas críticas de limpieza (pytest)
+ docs/                glosario, diagnóstico y acerca de (el asistente los cita)
+@@ -63,6 +64,11 @@ En Colab: `!git clone <url>`, `%cd bogota-se-mueve`, `!pip install -r requiremen
+ 
+ El modelo gana en 663, 695 y 23692. En 3493 y 10122 gana el promedio histórico (pocos estudios), así que la app usa el promedio en esos nodos. Detalle en `models/metricas.json`.
+ 
++## Evaluación del asistente
++`evaluacion/preguntas.csv` tiene 10 preguntas con su respuesta esperada (calculada con los datos) y criterios verificables. `python -m bsm.evaluar` califica al asistente con la escala 2 = correcta y con fuente, 1 = parcial o sin fuente, 0 = incorrecta o inventada, y guarda `evaluacion/resultados_asistente.csv`. La misma escala se aplica a mano al Buscador inteligente del portal Datos Abiertos Bogotá.
++
++Línea base (2026-11-21): **17 / 20**. Fallas: P05 (la búsqueda prioriza el nombre del lugar sobre el tema) y P07 (sinónimos: "errores" vs "problemas"). Las mejoras del buscador se validan con preguntas nuevas, no ajustando estas.
++
+ ## Despliegue (Render, plan gratuito)
+ 1. Entrar a https://render.com con la cuenta de GitHub del repositorio.
+ 2. **New → Blueprint** → elegir este repositorio. Render lee `render.yaml` y crea el servicio.
+diff --git a/docs/equipo/proximos_pasos.md b/docs/equipo/proximos_pasos.md
+index 9671f37..fcfed4e 100644
+--- a/docs/equipo/proximos_pasos.md
++++ b/docs/equipo/proximos_pasos.md
+@@ -5,9 +5,9 @@
+ | 1 | Subir este repositorio y dar acceso a Alejandro, Alfonso, Diego y Laura | Hecho (acceso pendiente) |
+ | 2 | Guardar `Nodos.zip` y `data/processed/` en la carpeta compartida del equipo | Pendiente |
+ | 3 | Desplegar en Render (New → Blueprint) y, si hay LLM, configurar sus variables | Pendiente |
+-| 4 | Escribir 10 preguntas de prueba con su respuesta esperada | Pendiente |
++| 4 | Escribir 10 preguntas de prueba con su respuesta esperada | Hecho: `evaluacion/preguntas.csv`; asistente 17/20 (línea base) |
+ | 5 | Comparar recuperación TF-IDF vs embeddings con esas 10 preguntas | Pendiente |
+-| 6 | Comparar el asistente contra el "Buscador inteligente" del portal Datos Abiertos | Pendiente |
++| 6 | Comparar el asistente contra el "Buscador inteligente" del portal Datos Abiertos | En curso: hoja compartida de evaluación (llenar columnas del portal) |
+ | 7 | Descargar siniestros (SIMUR) alrededor de los 6 nodos y agregarlos al asistente | Pendiente |
+ | 8 | Descargar congestión Waze 2026 alrededor de los nodos (revisar licencia) | Pendiente |
+ | 9 | Ajustar el modelo (hiperparámetros, validación con varios cortes temporales) | Pendiente |
+diff --git a/evaluacion/preguntas.csv b/evaluacion/preguntas.csv
+new file mode 100644
+index 0000000..224f21e
+--- /dev/null
++++ b/evaluacion/preguntas.csv
+@@ -0,0 +1,11 @@
++﻿id,tipo,pregunta,respuesta_esperada,criterio_correcta,criterio_parcial,fuente_esperada
++P01,cálculo,¿A qué hora hay más tráfico en la Autopista Norte con 170 un día hábil?,"De 17:00 a 18:00, con una mediana de unos 17.687 vehículos motorizados por hora (16 estudios en días hábiles).",17:00 & 17.687,17:00,Observatorio de Movilidad (SDM)
++P02,cálculo,¿Qué porcentaje de motos pasa por la Av. 68 con 72?,Mediana de 38 % de los vehículos motorizados (8 estudios completos).,38 %,motos,Observatorio de Movilidad (SDM)
++P03,cálculo,¿A qué hora hay más tráfico en la carrera 7 con calle 208 un fin de semana?,"De 13:00 a 14:00, con una mediana de unos 1.190 vehículos motorizados por hora (75 estudios de fin de semana).",13:00 & 1.190,13:00,Observatorio de Movilidad (SDM)
++P04,contexto,¿Qué pasó en la Vía a Cota con 116 los días de lluvia?,Notas de campo de los aforadores sobre lluvia en el nodo 663 (42 fechas con lluvia registrada; p. ej. 2025-03-21 'inicia fuerte aguacero').,lluv|llov|llue|aguacer & 663_,lluv|llov|llue|aguacer,Notas de campo (estudio citado)
++P05,contexto,¿Hubo accidentes en la Autopista Norte con 170?,"Sí: el 2024-02-08 un choque entre liviano y camión redujo el flujo (7:30–8:30), y el 2021-10-27 hubo congestión por accidente.",2024-02-08 & 2021-10-27,2024-02-08|2021-10-27,Notas de campo (estudio citado)
++P06,concepto,¿Qué es un auto equivalente (ACE)?,"Unidad que convierte cada vehículo en 'carros equivalentes' según el espacio que ocupa: carro 1, moto 0,5, bus 2, camión o articulado 2,5.","0,5 & 2,5",equivalente,Glosario
++P07,calidad,¿Los datos de aforos de la Secretaría de Movilidad tienen errores?,"Sí: archivos con datos de otro nodo, números de nodo mal digitados, fecha imposible (2027), archivos dañados, columnas corridas, IDs repetidos y cambios de método sin aviso.",otro nodo & columnas,dañados|repetid|fecha imposible|método,Diagnóstico de calidad
++P08,fuente,¿Dónde puedo descargar los aforos vehiculares de Bogotá?,"En el visor de volúmenes del Observatorio de Movilidad de la SDM (observatorio.movilidadbogota.gov.co), estudio por estudio; no están en el portal Datos Abiertos Bogotá.",observatorio & visor,observatorio,Diagnóstico de calidad
++P09,fuera de alcance,¿Cuál es el precio del pasaje de TransMilenio?,Debe decir que no tiene ese dato (no está en las fuentes del proyecto).,no tengo ese dato,,—
++P10,fuera de cobertura,¿Cuánto tráfico hay en la Calle 26 con Avenida Boyacá?,"Debe decir que no tiene datos de ese punto (no es uno de los 6 nodos) y ofrecer los disponibles, sin inventar cifras.",no tengo|sobre qué punto,,—
+diff --git a/evaluacion/resultados_asistente.csv b/evaluacion/resultados_asistente.csv
+new file mode 100644
+index 0000000..ae5ae70
+--- /dev/null
++++ b/evaluacion/resultados_asistente.csv
+@@ -0,0 +1,53 @@
++﻿id,tipo,pregunta,respuesta,puntaje,tiene_fuente
++P01,cálculo,¿A qué hora hay más tráfico en la Autopista Norte con 170 un día hábil?,"**Autopista Norte con Calle 170 (nodo 3493)**, día hábil:
++
++- Hora de mayor tráfico: **17:00–18:00**, con una mediana de **17.687 vehículos motorizados** (entre 16.808 y 18.320 en la mitad central de los días), según 16 estudios.
++- Participación de motos: mediana **23 %**; vehículos pesados: **13 %**.
++
++Fuente: 17 estudios completos del Observatorio de Movilidad (SDM), 2021-09-29 a 2026-09-29.",2,True
++P02,cálculo,¿Qué porcentaje de motos pasa por la Av. 68 con 72?,"**Av. 68 con Calle 72 (nodo 19513)**, día hábil:
++
++- Hora de mayor tráfico: **7:00–8:00**, con una mediana de **17.776 vehículos motorizados** (entre 16.813 y 18.413 en la mitad central de los días), según 6 estudios.
++- Participación de motos: mediana **38 %**; vehículos pesados: **11 %**.
++
++Fuente: 8 estudios completos del Observatorio de Movilidad (SDM), 2023-11-30 a 2025-05-10.",2,True
++P03,cálculo,¿A qué hora hay más tráfico en la carrera 7 con calle 208 un fin de semana?,"**AK 7 con Calle 208 (nodo 695)**, fin de semana:
++
++- Hora de mayor tráfico: **13:00–14:00**, con una mediana de **1.190 vehículos motorizados** (entre 851 y 1.412 en la mitad central de los días), según 75 estudios.
++- Participación de motos: mediana **18 %**; vehículos pesados: **3 %**.
++
++Fuente: 159 estudios completos del Observatorio de Movilidad (SDM), 2021-09-09 a 2026-11-15.",2,True
++P04,contexto,¿Qué pasó en la Vía a Cota con 116 los días de lluvia?,"Esto es lo que encontré en las fuentes:
++
++- Nodo 663 (Vía a Cota con Cra 116), 2025-03-21, acceso W: inicia fuerte aguacero [Estudio 663_20250321_VOL_v2 (nota de campo)]
++- Nodo 663 (Vía a Cota con Cra 116), 2025-04-20, acceso W: llueve 15:11 [Estudio 663_20250420_VOL (nota de campo)]
++- Nodo 663 (Vía a Cota con Cra 116), 2025-04-20, acceso E: llueve 15:11 [Estudio 663_20250420_VOL (nota de campo)]
++- Nodo 663 (Vía a Cota con Cra 116), 2023-12-31, acceso W: llueve alas 14:15 [Estudio 663_20231231_VOL (nota de campo)]
++- Nodo 663 (Vía a Cota con Cra 116), 2025-04-20, acceso E: deja de llover. [Estudio 663_20250420_VOL (nota de campo)]",2,True
++P05,contexto,¿Hubo accidentes en la Autopista Norte con 170?,"Esto es lo que encontré en las fuentes:
++
++- Nodo 3493 (Autopista Norte con Calle 170), 2024-02-08, acceso W: Baja volumen por choque entre liviano y camion [Estudio 3493_20240208_VOL (nota de campo)]",1,True
++P06,concepto,¿Qué es un auto equivalente (ACE)?,"Esto es lo que encontré en las fuentes:
++
++- ## Auto equivalente (ACE)
++Unidad que convierte cada tipo de vehículo en ""carros equivalentes"" según el espacio que ocupa en la vía. Un carro vale 1, una moto 0,5, un bus 2 y un camión o un articulado 2,5. Los factores salen de cada archivo de la SDM. [glosario.md]",2,True
++P07,calidad,¿Los datos de aforos de la Secretaría de Movilidad tienen errores?,"Esto es lo que encontré en las fuentes:
++
++- ## Dónde están los datos de aforos
++Los aforos vehiculares de la SDM se publican en el visor de volúmenes del Observatorio de Movilidad (observatorio.movilidadbogota.gov.co), donde se descargan archivo por archivo. No aparecen como conjunto de datos en el portal Datos Abiertos Bogotá ni en el hub de datos abiertos de la SDM, y el Catálogo de Objetos de la SDM (versión 1.1, abril de 2026) no los incluye. [diagnostico_calidad.md]
++- ## Fuentes
++- Aforos vehiculares: visor de volúmenes del Observatorio de Movilidad, Secretaría Distrital de Movilidad.
++- Festivos: calendario oficial de Colombia. [acerca.md]
++- # Acerca de Bogotá se Mueve
++
++Herramienta del equipo Synexis para el reto de datos de la Alcaldía de Bogotá sobre confianza y apropiación de los datos públicos. Toma los aforos que publica la Secretaría Distrital de Movilidad y los presenta en lenguaje claro, con la fuente de cada cifra. [acerca.md]
++- ## Limitaciones
++- Los aforos son días puntuales, no un conteo continuo: las estimaciones describen un día típico, no el tráfico de hoy.
++- Los archivos oficiales tienen problemas de calidad documentados en la pestaña ""Calidad de datos"".
++- La herramienta no publica nombres de personas que aparecen en los archivos de la SDM. [acerca.md]",0,True
++P08,fuente,¿Dónde puedo descargar los aforos vehiculares de Bogotá?,"Esto es lo que encontré en las fuentes:
++
++- ## Dónde están los datos de aforos
++Los aforos vehiculares de la SDM se publican en el visor de volúmenes del Observatorio de Movilidad (observatorio.movilidadbogota.gov.co), donde se descargan archivo por archivo. No aparecen como conjunto de datos en el portal Datos Abiertos Bogotá ni en el hub de datos abiertos de la SDM, y el Catálogo de Objetos de la SDM (versión 1.1, abril de 2026) no los incluye. [diagnostico_calidad.md]",2,True
++P09,fuera de alcance,¿Cuál es el precio del pasaje de TransMilenio?,No tengo ese dato en las fuentes disponibles.,2,True
++P10,fuera de cobertura,¿Cuánto tráfico hay en la Calle 26 con Avenida Boyacá?,¿Sobre qué punto preguntas? Tengo datos de: 663 (Vía a Cota con Cra 116); 695 (AK 7 con Calle 208); 23692 (Calle 102A con Tv 13A Este); 3493 (Autopista Norte con Calle 170); 19513 (Av. 68 con Calle 72); 10122 (Calle 171 con Cra 111).,2,False
+diff --git a/src/bsm/evaluar.py b/src/bsm/evaluar.py
+new file mode 100644
+index 0000000..64f7d3c
+--- /dev/null
++++ b/src/bsm/evaluar.py
+@@ -0,0 +1,59 @@
++"""Evalúa el asistente con el set de preguntas de prueba (evaluacion/preguntas.csv).
++
++Escala (la misma para el asistente y para el buscador del portal):
++    2 = correcta y con fuente      1 = parcial o sin fuente      0 = incorrecta, irrelevante o inventada
++
++Criterios de cada pregunta (columnas criterio_correcta / criterio_parcial):
++    "a & b"  -> deben aparecer todos los términos;   "a|b" -> basta uno.
++
++Uso:
++    python -m bsm.evaluar            # escribe evaluacion/resultados_asistente.csv
++"""
++import re
++import sys
++from pathlib import Path
++
++import pandas as pd
++
++RAIZ = Path(__file__).resolve().parents[2]
++
++
++def cumple(criterio, texto: str) -> bool:
++    if not isinstance(criterio, str) or not criterio.strip():
++        return False
++    t = texto.lower()
++    return all(any(op.strip().lower() in t for op in grupo.split("|")) for grupo in criterio.split("&"))
++
++
++def tiene_fuente(texto: str) -> bool:
++    return bool(re.search(r"fuente|\[estudio|\[[\w_]+\.md\]|observatorio", texto, re.I))
++
++
++def calificar(fila, respuesta: str):
++    rechazo = fila.tipo in ("fuera de alcance", "fuera de cobertura")
++    if cumple(fila.criterio_correcta, respuesta) and (rechazo or tiene_fuente(respuesta)):
++        return 2
++    if cumple(fila.criterio_correcta, respuesta) or cumple(fila.criterio_parcial, respuesta):
++        return 1
++    return 0
++
++
++def main():
++    sys.path.insert(0, str(RAIZ))
++    import app  # noqa: PLC0415 - la app carga datos y modelo al importarse
++
++    preguntas = pd.read_csv(RAIZ / "evaluacion" / "preguntas.csv")
++    filas = []
++    for f in preguntas.itertuples():
++        r = app.chat(f.pregunta, [])
++        filas.append({"id": f.id, "tipo": f.tipo, "pregunta": f.pregunta, "respuesta": r,
++                      "puntaje": calificar(f, r), "tiene_fuente": tiene_fuente(r)})
++    res = pd.DataFrame(filas)
++    res.to_csv(RAIZ / "evaluacion" / "resultados_asistente.csv", index=False, encoding="utf-8-sig")
++    print(res[["id", "tipo", "puntaje", "tiene_fuente"]].to_string(index=False))
++    print(f"\nTotal: {res.puntaje.sum()} / {2 * len(res)}")
++    return res
++
++
++if __name__ == "__main__":
++    main()

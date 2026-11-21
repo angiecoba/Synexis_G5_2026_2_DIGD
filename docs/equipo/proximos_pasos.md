@@ -5,9 +5,9 @@
 | 1 | Subir este repositorio y dar acceso a Alejandro, Alfonso, Diego y Laura | Hecho (acceso pendiente) |
 | 2 | Guardar `Nodos.zip` y `data/processed/` en la carpeta compartida del equipo | Pendiente |
 | 3 | Desplegar en Render (New → Blueprint) y, si hay LLM, configurar sus variables | Pendiente |
-| 4 | Escribir 10 preguntas de prueba con su respuesta esperada | Pendiente |
+| 4 | Escribir 10 preguntas de prueba con su respuesta esperada | Hecho: `evaluacion/preguntas.csv`; asistente 17/20 (línea base) |
 | 5 | Comparar recuperación TF-IDF vs embeddings con esas 10 preguntas | Pendiente |
-| 6 | Comparar el asistente contra el "Buscador inteligente" del portal Datos Abiertos | Pendiente |
+| 6 | Comparar el asistente contra el "Buscador inteligente" del portal Datos Abiertos | En curso: hoja compartida de evaluación (llenar columnas del portal) |
 | 7 | Descargar siniestros (SIMUR) alrededor de los 6 nodos y agregarlos al asistente | Pendiente |
 | 8 | Descargar congestión Waze 2026 alrededor de los nodos (revisar licencia) | Pendiente |
 | 9 | Ajustar el modelo (hiperparámetros, validación con varios cortes temporales) | Pendiente |

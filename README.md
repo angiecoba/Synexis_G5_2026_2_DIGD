@@ -30,6 +30,7 @@ src/bsm/
   modelo.py          modelo + rival + métricas  ->  python -m bsm.modelo
   preparar_app.py    carpeta liviana de la app  ->  python -m bsm.preparar_app
   rag.py             enrutador, búsqueda con cita y LLM opcional
+  evaluar.py         califica el asistente con evaluacion/preguntas.csv -> python -m bsm.evaluar
 app.py               app Gradio (Asistente · Explorar · Predecir · Calidad · Acerca de)
 tests/               reglas críticas de limpieza (pytest)
 docs/                glosario, diagnóstico y acerca de (el asistente los cita)
@@ -62,6 +63,11 @@ En Colab: `!git clone <url>`, `%cd bogota-se-mueve`, `!pip install -r requiremen
 | Modelo (gradient boosting) | **24,2 %** |
 
 El modelo gana en 663, 695 y 23692. En 3493 y 10122 gana el promedio histórico (pocos estudios), así que la app usa el promedio en esos nodos. Detalle en `models/metricas.json`.
+
+## Evaluación del asistente
+`evaluacion/preguntas.csv` tiene 10 preguntas con su respuesta esperada (calculada con los datos) y criterios verificables. `python -m bsm.evaluar` califica al asistente con la escala 2 = correcta y con fuente, 1 = parcial o sin fuente, 0 = incorrecta o inventada, y guarda `evaluacion/resultados_asistente.csv`. La misma escala se aplica a mano al Buscador inteligente del portal Datos Abiertos Bogotá.
+
+Línea base (2026-11-21): **17 / 20**. Fallas: P05 (la búsqueda prioriza el nombre del lugar sobre el tema) y P07 (sinónimos: "errores" vs "problemas"). Las mejoras del buscador se validan con preguntas nuevas, no ajustando estas.
 
 ## Despliegue (Render, plan gratuito)
 1. Entrar a https://render.com con la cuenta de GitHub del repositorio.

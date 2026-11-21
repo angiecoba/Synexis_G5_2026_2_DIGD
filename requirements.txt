@@ -1,0 +1,12 @@
+# Versiones fijas: lo que corre aquí corre igual en el Space y en Colab.
+pandas==3.0.5
+numpy==2.5.3
+scikit-learn==1.9.1
+openpyxl==3.1.5
+pyarrow==26.0.1
+holidays==0.109
+pandera==0.36.0
+joblib==1.6.0
+requests==2.34.2
+gradio==6.32.0
+plotly==7.1.0

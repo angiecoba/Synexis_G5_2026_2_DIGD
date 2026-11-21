@@ -1,0 +1,21 @@
+# Datos: no van en Git (ver data/README.md)
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+# Artefactos del modelo: se publican en Hugging Face Hub
+models/*
+!models/.gitkeep
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+# Notebooks: sin checkpoints
+.ipynb_checkpoints/
+# Secretos
+.env
+# Sistema
+.DS_Store
+~$*.xlsx

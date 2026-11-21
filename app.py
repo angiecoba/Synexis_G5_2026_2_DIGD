@@ -99,6 +99,7 @@ from bsm.lenguaje import miles  # noqa: E402,F811  (formato 17.687)
 from bsm.lenguaje import NINGUN_PERIODO, NOMBRE_PERIODO, UN_PERIODO, periodo_de  # noqa: E402
 
 MIN_DIAS_PERIODO = 3   # un periodo con menos días medidos no se dibuja: sería poco confiable
+MIN_DIAS_DESTACAR = 7  # solo se destaca (más/menos cargado) un periodo con al menos estos días
 COMPARAR = {"No comparar": None, "Por año": "anio", "Por mes": "mes", "Por temporada": "temporada"}
 
 
@@ -118,7 +119,8 @@ def perfil_por_periodo(nodo, tipo, por):
     t = (dia[dia.periodo.isin(validos.index)].groupby(["periodo", "hora"], as_index=False)
             .veh.median().rename(columns={"veh": "mediana"}))
     t["dias"] = t.periodo.map(validos)
-    return t, [o for o in orden if o in validos.index], sorted(set(dias.index) - set(validos.index))
+    return (t, [o for o in orden if o in validos.index],
+            [o for o in orden if o in dias.index and o not in validos.index])  # en orden de calendario
 
 
 def mezcla_por_periodo(nodo, tipo, por):
@@ -168,29 +170,52 @@ def texto_periodos(t, orden, descartados, por, lugar, tipo_txt):
         return (f"⚠️ En {lugar} ({tipo_txt}) no hay al menos {MIN_DIAS_PERIODO} días medidos en "
                 f"{NINGUN_PERIODO[por]}, así que no se puede comparar por {nombre}. Prueba con otro tipo de día u otro punto.")
     picos = t.loc[t.groupby("periodo").mediana.idxmax()].set_index("periodo").reindex(orden)
-    alto, bajo = picos.mediana.idxmax(), picos.mediana.idxmin()
+    solidos, pocos = partir_por_dias(t, orden)
     txt = (f"Cada línea es {UN_PERIODO[por]}: muestra cuántos vehículos pasan normalmente en cada hora "
            f"en {lugar} ({tipo_txt}).")
-    if len(orden) > 1:
-        txt += (f" La hora pico más cargada es en **{alto}** (unos {aproximar(picos.mediana[alto])} vehículos) "
-                f"y la más liviana en **{bajo}** (unos {aproximar(picos.mediana[bajo])}).")
-    txt += (f"\n\n<small>Entre paréntesis está cuántos días se midieron en cada {nombre}: con pocos días, la "
-            "línea puede reflejar un día particular más que una tendencia.")
+    if len(solidos) > 1:
+        p = picos.reindex(solidos)
+        alto, bajo = p.mediana.idxmax(), p.mediana.idxmin()
+        txt += (f" Entre los periodos con suficientes días medidos, la hora pico más cargada es en **{alto}** "
+                f"(unos {aproximar(p.mediana[alto])} vehículos) y la más liviana en **{bajo}** "
+                f"(unos {aproximar(p.mediana[bajo])}).")
+    elif len(orden) > 1:
+        txt += (f" Ningún par de periodos tiene suficientes días medidos (al menos {MIN_DIAS_DESTACAR}) para "
+                "decir con confianza cuál es más cargado; mira las líneas solo como referencia.")
+    txt += "\n\n" + aviso_pocos_dias(pocos, nombre)
+    txt += (f"<small>Entre paréntesis está cuántos días se midieron en cada {nombre}.")
     if descartados:
-        txt += (f" No se dibujan {', '.join(map(str, descartados))} porque tienen menos de "
+        txt += (f" No se dibujan {enumerar([str(d) for d in descartados])} porque tienen menos de "
                 f"{MIN_DIAS_PERIODO} días medidos.")
     return txt + "</small>"
+
+
+def partir_por_dias(t, orden):
+    """Separa los periodos con suficientes días para destacarlos de los que tienen pocos."""
+    dias = t.groupby("periodo").dias.first()
+    return ([o for o in orden if dias[o] >= MIN_DIAS_DESTACAR],
+            [(o, int(dias[o])) for o in orden if dias[o] < MIN_DIAS_DESTACAR])
+
+
+def aviso_pocos_dias(pocos, nombre, marca="la línea") -> str:
+    if not pocos:
+        return ""
+    lista = enumerar([f"{o} ({d} días)" for o, d in pocos])
+    return (f"⚠️ **Con pocos días medidos:** {lista}. Con menos de {MIN_DIAS_DESTACAR} días, {marca} puede "
+            "reflejar un día particular (un cierre, la lluvia, un evento) más que lo normal, así que tómala con "
+            "cautela; por eso no se usa para destacar.\n\n")
 
 
 def texto_mezcla(t, orden, por):
     if not orden:
         return ""
-    motos = t[t.grupo == "Motos"].set_index("periodo").porcentaje.reindex(orden).dropna()
+    solidos, pocos = partir_por_dias(t, orden)
+    motos = t[t.grupo == "Motos"].set_index("periodo").porcentaje.reindex(solidos).dropna()
     txt = "**¿Cambian los tipos de vehículo?** Cada barra suma 100: de cada 100 vehículos, cuántos son de cada tipo."
     if len(motos) > 1:
-        txt += (f" Las motos van de **{motos.min():.0f} de cada 100** en {motos.idxmin()} a "
-                f"**{motos.max():.0f} de cada 100** en {motos.idxmax()}.")
-    return txt
+        txt += (f" Entre los periodos con suficientes días medidos, las motos van de **{motos.min():.0f} de cada "
+                f"100** en {motos.idxmin()} a **{motos.max():.0f} de cada 100** en {motos.idxmax()}.")
+    return txt + ("\n\n" + aviso_pocos_dias(pocos, NOMBRE_PERIODO[por], "la barra").rstrip() if pocos else "")
 
 
 def nodo_de(opcion: str) -> int:

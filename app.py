@@ -21,6 +21,7 @@ import plotly.express as px
 RAIZ = Path(__file__).parent
 sys.path.insert(0, str(RAIZ / "src"))
 
+from bsm.catalogo import FESTIVOS  # noqa: E402
 from bsm.modelo import predecir_dia  # noqa: E402
 from bsm.rag import (ETIQUETA_NODO, Buscador, construir_corpus, detectar_nodo,  # noqa: E402
                      intencion, responder_contexto)
@@ -28,6 +29,18 @@ from bsm.rag import (ETIQUETA_NODO, Buscador, construir_corpus, detectar_nodo,  
 APP_DATOS = Path(os.getenv("BSM_APP", RAIZ / "data" / "app"))
 OPCIONES_NODO = [f"{n} · {e}" for n, e in ETIQUETA_NODO.items()]
 TIPOS_DIA = {"Día hábil": "habil", "Fin de semana": "finde", "Festivo": "festivo"}
+DIAS_ES = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+NOMBRE_TIPO = {"habil": "día hábil", "finde": "fin de semana", "festivo": "festivo"}
+COLUMNAS_ESTUDIOS = {
+    "estudio": "Estudio", "fecha_estudio": "Fecha", "dia_semana": "Día", "cobertura_tipo": "Cobertura",
+    "veh_motorizados_5a23": "Vehículos motorizados (5:00–23:00)", "hora_pico": "Hora pico",
+    "pct_motos": "% motos", "pct_pesados": "% pesados", "alerta_calidad": "Alerta de calidad"}
+EXPLICACION_ALERTA = {
+    "ID_REPETIDO": "El mismo número de estudio de la SDM aparece en varias fechas",
+    "PARTICIPACION_ATIPICA": "Un tipo de vehículo tiene una participación muy distinta a la habitual del nodo "
+                             "(posibles columnas corridas o mal etiquetadas)",
+    "CAMBIO_DE_METODO": "Se empezaron a contar bicicletas en ciclorruta: el total de bicis no es comparable",
+}
 
 
 @lru_cache(maxsize=1)
@@ -98,30 +111,52 @@ def explorar(opcion, tipo_txt):
     horas, resumen, *_ = cargar()
     nodo, tipo = nodo_de(opcion), TIPOS_DIA[tipo_txt]
     p = perfil_historico(horas, nodo, tipo)
+    n_est = int(p.estudios.max()) if len(p) else 0
     fig = px.line(p, x="hora", y="mediana", markers=True,
-                  labels={"hora": "Hora del día", "mediana": "Vehículos motorizados por hora (mediana)"},
-                  title=f"Perfil horario · {ETIQUETA_NODO[nodo]} · {tipo_txt}")
+                  labels={"hora": "Hora del día", "mediana": "Vehículos por hora"},
+                  title=f"Perfil horario · {ETIQUETA_NODO[nodo]} · {tipo_txt} · {n_est} estudios"
+                        if n_est else f"Sin estudios de tipo «{tipo_txt}» para {ETIQUETA_NODO[nodo]}")
+    fig.update_traces(hovertemplate="%{x}:00 → %{y:,.0f} vehículos")
     fig.add_scatter(x=p.hora, y=p.p75, mode="lines", line=dict(width=0), showlegend=False, hoverinfo="skip")
     fig.add_scatter(x=p.hora, y=p.p25, mode="lines", line=dict(width=0), fill="tonexty",
                     name="50 % central de los días", hoverinfo="skip")
     cols = ["estudio", "fecha_estudio", "dia_semana", "cobertura_tipo", "veh_motorizados_5a23",
             "hora_pico", "pct_motos", "pct_pesados", "alerta_calidad"]
-    return fig, resumen[resumen.nodo == nodo][cols].sort_values("fecha_estudio", ascending=False)
+    tabla = resumen[resumen.nodo == nodo][cols].sort_values("fecha_estudio", ascending=False)
+    return fig, tabla.rename(columns=COLUMNAS_ESTUDIOS)
 
 
 def predecir(opcion, fecha, festivo):
-    *_, artefacto, metricas, _ = cargar()
+    horas, *_, artefacto, metricas, _ = cargar()
     nodo = nodo_de(opcion)
-    X = predecir_dia(artefacto, nodo, fecha, festivo)
+    try:
+        f = pd.Timestamp(fecha)
+    except ValueError:
+        return None, "Escribe la fecha como AAAA-MM-DD, por ejemplo 2026-12-08."
+    es_festivo_oficial = bool(FESTIVOS and f in FESTIVOS)
+    festivo = bool(festivo) or es_festivo_oficial
+    tipo = "festivo" if festivo else ("finde" if f.dayofweek >= 5 else "habil")
+    n_tipo = horas[(horas.nodo == nodo) & (horas.tipo_dia == tipo)].estudio.nunique()
+    X = predecir_dia(artefacto, nodo, f, festivo)
     tot = X.groupby("hora").prediccion.sum().reset_index()
     metodo = X.metodo.iloc[0]
     fig = px.bar(tot, x="hora", y="prediccion",
-                 labels={"hora": "Hora", "prediccion": "Vehículos motorizados estimados"},
-                 title=f"Estimación · {ETIQUETA_NODO[nodo]} · {pd.Timestamp(fecha):%A %d-%m-%Y}")
+                 labels={"hora": "Hora", "prediccion": "Vehículos estimados"},
+                 title=f"Estimación · {ETIQUETA_NODO[nodo]} · {DIAS_ES[f.dayofweek]} {f:%d-%m-%Y}"
+                       + (" (festivo)" if festivo else ""))
+    fig.update_traces(hovertemplate="%{x}:00 → %{y:,.0f} vehículos")
     m = metricas["por_nodo"].get(str(nodo), {})
-    nota = (f"Método: **{'modelo (gradient boosting)' if metodo == 'modelo' else 'promedio histórico'}**. "
-            + (f"Error típico en la prueba con 2026: {m.get('wape_modelo' if metodo == 'modelo' else 'wape_rival')} % "
-               f"del volumen ({m.get('estudios_test')} estudios no vistos)." if m else
+    aviso = ""
+    if es_festivo_oficial:
+        aviso += "📅 Esta fecha es festivo en Colombia; se estimó como festivo.\n\n"
+    if n_tipo == 0:
+        aviso += (f"⚠️ **No hay ningún estudio de tipo «{NOMBRE_TIPO[tipo]}» en este nodo.** La estimación "
+                  "usa el patrón de los otros tipos de día y puede no representar ese día. Tómala con cautela.\n\n")
+    elif n_tipo < 5:
+        aviso += f"⚠️ Solo hay {n_tipo} estudio(s) de tipo «{NOMBRE_TIPO[tipo]}» en este nodo: la estimación es poco robusta.\n\n"
+    nota = aviso + (f"Método: **{'modelo (gradient boosting)' if metodo == 'modelo' else 'promedio histórico'}**. "
+            + (f"Error típico en la prueba con 2026: {str(m.get('wape_modelo' if metodo == 'modelo' else 'wape_rival')).replace('.', ',')} % "
+               f"del volumen ({m.get('estudios_test')} {'estudio no visto' if m.get('estudios_test') == 1 else 'estudios no vistos'} al entrenar)." if m else
                "Este nodo no tiene estudios de 2026 para medir el error; úsese como referencia.")
             + " Es una estimación del patrón típico, no un conteo real.")
     return fig, nota
@@ -129,8 +164,14 @@ def predecir(opcion, fecha, festivo):
 
 def calidad():
     _, resumen, alertas, *_ = cargar()
-    conteo = alertas.groupby(["nodo", "tipo_alerta"]).size().reset_index(name="estudios")
-    return conteo, alertas
+    a = alertas.assign(explicacion=alertas.tipo_alerta.map(EXPLICACION_ALERTA))
+    conteo = (a.groupby(["nodo", "tipo_alerta", "explicacion"]).estudio.nunique()
+                .reset_index(name="estudios")
+                .rename(columns={"nodo": "Nodo", "tipo_alerta": "Tipo", "explicacion": "Qué significa",
+                                 "estudios": "Estudios afectados"}))
+    detalle = a[["nodo", "estudio", "tipo_alerta", "detalle"]].rename(
+        columns={"nodo": "Nodo", "estudio": "Estudio", "tipo_alerta": "Tipo", "detalle": "Detalle"})
+    return conteo, detalle
 
 
 # ------------------------------------------------------------------ interfaz
@@ -138,7 +179,8 @@ with gr.Blocks(title="Bogotá se Mueve") as demo:
     gr.Markdown("# Bogotá se Mueve\nDatos de aforos del Observatorio de Movilidad de Bogotá, "
                 "explicados en lenguaje claro y con su fuente.")
     with gr.Tab("Asistente"):
-        gr.ChatInterface(chat, examples=[
+        gr.ChatInterface(chat, textbox=gr.Textbox(placeholder="Escribe tu pregunta sobre el tráfico en estos puntos…",
+                                                  submit_btn=True), examples=[
             "¿A qué hora hay más tráfico en la Autopista Norte con 170 un día hábil?",
             "¿Qué pasó en la Vía a Cota con 116 los días de lluvia?",
             "¿Qué porcentaje de motos pasa por la Av. 68 con 72?",
@@ -155,7 +197,7 @@ with gr.Blocks(title="Bogotá se Mueve") as demo:
         with gr.Row():
             n2 = gr.Dropdown(OPCIONES_NODO, value=OPCIONES_NODO[0], label="Nodo")
             f2 = gr.Textbox(value=str(pd.Timestamp.today().date()), label="Fecha (AAAA-MM-DD)")
-            fe2 = gr.Checkbox(label="Es festivo")
+            fe2 = gr.Checkbox(label="Es festivo (los festivos oficiales se detectan solos)")
         b2 = gr.Button("Estimar")
         g2, nota2 = gr.Plot(), gr.Markdown()
         b2.click(predecir, [n2, f2, fe2], [g2, nota2])

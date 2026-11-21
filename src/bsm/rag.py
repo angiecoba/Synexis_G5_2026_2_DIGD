@@ -22,6 +22,7 @@ import requests
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 from .catalogo import NODOS_PROYECTO
+from .lenguaje import acceso_amigable, fecha_larga
 
 NOMBRES_NODO = {
     663: ["via a cota", "cota", "116", "carrera 116"],
@@ -135,7 +136,8 @@ class Buscador:
 
 
 PROMPT_SISTEMA = (
-    "Eres el asistente de 'Bogotá se Mueve'. Respondes en español claro a ciudadanos. "
+    "Eres el asistente de 'Bogotá se Mueve'. Respondes en español sencillo y cercano a ciudadanos "
+    "sin formación técnica: frases cortas, sin jerga, y si usas un término técnico lo explicas. "
     "Usa SOLO la información de los fragmentos entregados. Cita la fuente entre corchetes "
     "después de cada afirmación. Si la información no está en los fragmentos, responde "
     "exactamente: 'No tengo ese dato en las fuentes disponibles.' No inventes cifras."
@@ -182,11 +184,44 @@ def responder_contexto(buscador: Buscador, pregunta: str, k: int = 5) -> str:
             hits.append((f, sc))
     hits = hits[:k]
     if not hits:
-        return "No tengo ese dato en las fuentes disponibles."
+        return ("No tengo ese dato en las fuentes disponibles. Puedo ayudarte con el tráfico, las notas de "
+                "campo y la calidad de los datos en 6 puntos de Bogotá.")
     contexto = "\n".join(f"- {f.texto} [{f.fuente}]" for f, _ in hits)
     try:
         r = llamar_llm(pregunta, contexto)
-    except Exception as e:  # noqa: BLE001 - si el LLM falla, se responde extractivo
+    except Exception:  # noqa: BLE001 - si el LLM falla, se responde con los fragmentos
         r = None
-        contexto += f"\n\n(El modelo de lenguaje no respondió: {type(e).__name__})"
-    return r or ("Esto es lo que encontré en las fuentes:\n\n" + contexto)
+    return r or presentar(hits)
+
+
+NOTA = re.compile(r"Nodo (\d+) \((.*?)\), (\d{4}-\d{2}-\d{2}), acceso (.*?): (.*)", re.S)
+
+
+def presentar(hits) -> str:
+    """Respuesta sin LLM, pero en lenguaje claro: notas de campo con fecha y lugar legibles,
+    y documentos sin marcas técnicas. Cada fragmento conserva su fuente."""
+    notas, docs = [], []
+    for f, _ in hits:
+        m = NOTA.match(f.texto)
+        if m:
+            _, lugar, fecha, acceso, obs = m.groups()
+            codigo = f.fuente.split()[1] if f.fuente.startswith("Estudio") else f.fuente
+            notas.append((lugar, f"📅 **{fecha_larga(fecha)}**, entrada por el {acceso_amigable(acceso)}: "
+                                 f"«{obs.strip().rstrip('.')}» <small>(estudio {codigo})</small>"))
+        else:
+            partes = f.texto.lstrip("#- ").split("\n", 1)
+            titulo, cuerpo = (partes + [""])[:2]
+            cuerpo = cuerpo.strip() or titulo
+            docs.append(f"**{titulo.strip().rstrip(':')}.** {cuerpo} <small>(fuente: {f.fuente.replace('.md', '')})</small>")
+    salida = []
+    if notas:
+        salida.append(f"Esto anotaron las personas que contaron los vehículos en la calle "
+                      f"(aforadores) en **{notas[0][0]}**:\n")
+        salida += [f"- {t}" for _, t in notas]
+        salida.append("\nℹ️ Son notas escritas durante los conteos. Solo cubren los días en que hubo medición, "
+                      "así que pudo haber otros casos que no quedaron registrados.")
+    if docs:
+        if notas:
+            salida.append("")
+        salida += docs
+    return "\n".join(salida)

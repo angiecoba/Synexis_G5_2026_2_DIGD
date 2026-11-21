@@ -9,6 +9,7 @@ Variables de entorno (en Render: Environment):
 """
 import json
 import os
+import re
 import sys
 from functools import lru_cache
 from pathlib import Path
@@ -22,6 +23,8 @@ RAIZ = Path(__file__).parent
 sys.path.insert(0, str(RAIZ / "src"))
 
 from bsm.catalogo import FESTIVOS  # noqa: E402
+from bsm.lenguaje import (EXPLICA_MEDIANA, EXPLICA_RANGO, CATEGORIAS, aproximar,  # noqa: E402
+                          de_cada_10, explicar_error, hora_amigable)
 from bsm.modelo import predecir_dia  # noqa: E402
 from bsm.rag import (ETIQUETA_NODO, Buscador, construir_corpus, detectar_nodo,  # noqa: E402
                      intencion, responder_contexto)
@@ -32,14 +35,23 @@ TIPOS_DIA = {"Día hábil": "habil", "Fin de semana": "finde", "Festivo": "festi
 DIAS_ES = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
 NOMBRE_TIPO = {"habil": "día hábil", "finde": "fin de semana", "festivo": "festivo"}
 COLUMNAS_ESTUDIOS = {
-    "estudio": "Estudio", "fecha_estudio": "Fecha", "dia_semana": "Día", "cobertura_tipo": "Cobertura",
-    "veh_motorizados_5a23": "Vehículos motorizados (5:00–23:00)", "hora_pico": "Hora pico",
-    "pct_motos": "% motos", "pct_pesados": "% pesados", "alerta_calidad": "Alerta de calidad"}
+    "fecha_estudio": "Fecha", "dia_semana": "Día", "veh_motorizados_5a23": "Vehículos en el día (5 a. m.–11 p. m.)",
+    "hora_pico": "Hora con más tráfico", "pct_motos": "% motos", "pct_pesados": "% buses y camiones",
+    "cobertura_tipo": "¿Se contó todo el día?", "alerta_calidad": "Alerta de calidad", "estudio": "Código del estudio"}
+NOMBRE_ALERTA = {
+    "ID_REPETIDO": "Número de estudio repetido",
+    "PARTICIPACION_ATIPICA": "Cifra sospechosa",
+    "CAMBIO_DE_METODO": "Cambió la forma de contar",
+}
 EXPLICACION_ALERTA = {
-    "ID_REPETIDO": "El mismo número de estudio de la SDM aparece en varias fechas",
-    "PARTICIPACION_ATIPICA": "Un tipo de vehículo tiene una participación muy distinta a la habitual del nodo "
-                             "(posibles columnas corridas o mal etiquetadas)",
-    "CAMBIO_DE_METODO": "Se empezaron a contar bicicletas en ciclorruta: el total de bicis no es comparable",
+    "ID_REPETIDO": "La Secretaría usó el mismo número para identificar estudios de días distintos. "
+                   "No cambia los conteos, pero complica rastrear de dónde sale cada dato.",
+    "PARTICIPACION_ATIPICA": "Ese día, un tipo de vehículo aparece en una proporción muy distinta a la de días "
+                             "parecidos (por ejemplo, casi sin carros y lleno de bicicletas). Puede ser un error del "
+                             "archivo, como números en la columna equivocada, o un día realmente especial. "
+                             "Hay que revisarlo antes de usar esa cifra.",
+    "CAMBIO_DE_METODO": "Desde ese día también se contaron las bicicletas de la ciclorruta. Por eso parece "
+                        "que hay muchas más bicis, pero es porque se contó un lugar más.",
 }
 
 
@@ -70,9 +82,7 @@ def franja(h) -> str:
     return f"{h:02d}:00–{(h + 1) % 24:02d}:00"
 
 
-def miles(x) -> str:
-    """Formato colombiano: 17.687 (punto de miles)."""
-    return f"{x:,.0f}".replace(",", ".")
+from bsm.lenguaje import miles  # noqa: E402,F811  (formato 17.687)
 
 
 def nodo_de(opcion: str) -> int:
@@ -92,26 +102,36 @@ def responder_calculo(pregunta: str) -> str:
     horas, resumen, *_ = cargar()
     nodo = detectar_nodo(pregunta)
     if nodo is None:
-        return ("¿Sobre qué punto preguntas? Tengo datos de: "
-                + "; ".join(f"{n} ({e})" for n, e in ETIQUETA_NODO.items()) + ".")
+        return ("No tengo datos de ese punto. Puedo contarte sobre el tráfico en estos 6 lugares de Bogotá:\n\n"
+                + "\n".join(f"- {e}" for e in ETIQUETA_NODO.values())
+                + "\n\nEscribe tu pregunta nombrando uno de ellos.")
     q = pregunta.lower()
     tipo = "finde" if any(w in q for w in ["sábado", "sabado", "domingo", "fin de semana"]) else (
         "festivo" if "festivo" in q else "habil")
+    cuando = {"habil": "entre semana (de lunes a viernes)", "finde": "los fines de semana",
+              "festivo": "los festivos"}[tipo]
     p = perfil_historico(horas, nodo, tipo)
     if p.empty:
-        return f"No tengo estudios de tipo '{tipo}' para el nodo {nodo}."
+        return (f"Todavía no hay días medidos {cuando} en {ETIQUETA_NODO[nodo]}, así que no puedo "
+                "darte una cifra confiable. Prueba con otro tipo de día.")
     pico = p.loc[p.mediana.idxmax()]
     r = resumen[(resumen.nodo == nodo) & (resumen.cobertura_tipo == "completa")]
-    texto = (f"**{ETIQUETA_NODO[nodo]} (nodo {nodo})**, {dict((v, k) for k, v in TIPOS_DIA.items())[tipo].lower()}:\n\n"
-             f"- Hora de mayor tráfico: **{int(pico.hora)}:00–{int(pico.hora)+1}:00**, con una mediana de "
-             f"**{miles(pico.mediana)} vehículos motorizados** (entre {miles(pico.p25)} y {miles(pico.p75)} "
-             f"en la mitad central de los días), según {int(pico.estudios)} estudios.\n")
-    if len(r):
-        texto += (f"- Participación de motos: mediana **{r.pct_motos.median():.0f} %**; vehículos pesados: "
-                  f"**{r.pct_pesados.median():.0f} %**.\n")
     fechas = r.fecha_estudio.sort_values()
-    if len(fechas):
-        texto += f"\nFuente: {len(r)} estudios completos del Observatorio de Movilidad (SDM), {fechas.iloc[0]} a {fechas.iloc[-1]}."
+    texto = (f"### 🚗 {ETIQUETA_NODO[nodo]}, {cuando}\n\n"
+             f"**La hora con más tráfico es {hora_amigable(pico.hora)}.** "
+             f"En esa hora pasan normalmente **unos {aproximar(pico.mediana)} vehículos** con motor "
+             f"(carros, motos, buses y camiones). Es decir, unos {aproximar(pico.mediana / 60)} por minuto.\n\n"
+             f"- En la mitad de los días medidos, esa hora tuvo **entre {aproximar(pico.p25)} y "
+             f"{aproximar(pico.p75)} vehículos**.\n")
+    if len(r):
+        texto += (f"- **{de_cada_10(r.pct_motos.median()).capitalize()} son motos** "
+                  f"({r.pct_motos.median():.0f} %), y **{de_cada_10(r.pct_pesados.median())} son buses o "
+                  f"camiones** ({r.pct_pesados.median():.0f} %).\n")
+    texto += (f"\nℹ️ **¿De dónde salen estas cifras?** De {int(pico.estudios)} días en que la Secretaría "
+              f"Distrital de Movilidad contó, uno por uno, los vehículos que pasaron por este cruce"
+              + (f" (entre {fechas.iloc[0][:4]} y {fechas.iloc[-1][:4]})" if len(fechas) else "")
+              + f". {EXPLICA_MEDIANA}\n\n"
+              f"<small>Fuente: Observatorio de Movilidad de Bogotá (SDM), nodo {nodo}.</small>")
     return texto
 
 
@@ -130,21 +150,35 @@ def explorar(opcion, tipo_txt):
     n_est = int(p.estudios.max()) if len(p) else 0
     fig = px.line(p, x="hora", y="mediana", markers=True,
                   labels={"hora": "Hora del día", "mediana": "Vehículos por hora"},
-                  title=f"Perfil horario · {ETIQUETA_NODO[nodo]} · {tipo_txt} · {n_est} estudios"
-                        if n_est else f"Sin estudios de tipo «{tipo_txt}» para {ETIQUETA_NODO[nodo]}")
-    fig.update_traces(customdata=[franja(h) for h in p.hora],
-                      hovertemplate="%{customdata}<br>%{y:,.0f} vehículos por hora (mediana)<extra></extra>")
+                  title=f"{ETIQUETA_NODO[nodo]} · {tipo_txt.lower()}" if n_est
+                        else f"Sin días medidos de tipo «{tipo_txt.lower()}» en {ETIQUETA_NODO[nodo]}")
+    fig.update_traces(name="Lo normal (mediana)", showlegend=True,
+                      customdata=[hora_amigable(h) for h in p.hora],
+                      hovertemplate="%{customdata}<br>Normalmente: %{y:,.0f} vehículos<extra></extra>")
     eje_horas(fig)
     fig.add_scatter(x=p.hora, y=p.p75, mode="lines", line=dict(width=0), showlegend=False, hoverinfo="skip")
     fig.add_scatter(x=p.hora, y=p.p25, mode="lines", line=dict(width=0), fill="tonexty",
-                    name="50 % central de los días", hoverinfo="skip")
-    cols = ["estudio", "fecha_estudio", "dia_semana", "cobertura_tipo", "veh_motorizados_5a23",
-            "hora_pico", "pct_motos", "pct_pesados", "alerta_calidad"]
+                    name="Rango habitual (la mitad de los días)", hoverinfo="skip")
+    if n_est:
+        pico = p.loc[p.mediana.idxmax()]
+        guia = (f"**Cómo leer el gráfico:** la **línea azul** muestra cuántos vehículos pasan normalmente en "
+                f"cada hora; la **franja verde** es el rango habitual. Se basa en **{n_est} días medidos**. "
+                f"La hora con más tráfico es **{hora_amigable(pico.hora)}**, con unos "
+                f"**{aproximar(pico.mediana)} vehículos**.\n\n"
+                f"<small>{EXPLICA_MEDIANA} {EXPLICA_RANGO}</small>")
+    else:
+        guia = (f"⚠️ **No hay días medidos de tipo «{tipo_txt.lower()}» en este punto**, por eso el gráfico "
+                "está vacío. Prueba con otro tipo de día.")
+    cols = ["fecha_estudio", "dia_semana", "veh_motorizados_5a23", "hora_pico", "pct_motos", "pct_pesados",
+            "cobertura_tipo", "alerta_calidad", "estudio"]
     tabla = resumen[resumen.nodo == nodo][cols].sort_values("fecha_estudio", ascending=False).copy()
-    tabla["hora_pico"] = tabla["hora_pico"].map(lambda h: franja(h) if pd.notna(h) else "")
-    tabla["veh_motorizados_5a23"] = tabla["veh_motorizados_5a23"].map(lambda x: miles(x) if pd.notna(x) else "")
+    tabla["hora_pico"] = tabla["hora_pico"].map(lambda h: hora_amigable(h) if pd.notna(h) else "")
+    tabla["veh_motorizados_5a23"] = tabla["veh_motorizados_5a23"].map(lambda x: miles(x) if pd.notna(x) else "—")
+    for c in ["pct_motos", "pct_pesados"]:
+        tabla[c] = tabla[c].map(lambda x: f"{x:.0f} %" if pd.notna(x) else "")
+    tabla["cobertura_tipo"] = tabla["cobertura_tipo"].map({"completa": "Sí", "parcial": "No, solo algunas horas"})
     tabla["alerta_calidad"] = tabla["alerta_calidad"].fillna("")
-    return fig, tabla.rename(columns=COLUMNAS_ESTUDIOS)
+    return guia, fig, tabla.rename(columns=COLUMNAS_ESTUDIOS)
 
 
 def predecir(opcion, fecha, festivo):
@@ -170,33 +204,71 @@ def predecir(opcion, fecha, festivo):
     eje_horas(fig, "Hora del día (formato 24 h; cada barra es la hora que empieza ahí)")
     pico = tot.loc[tot.prediccion.idxmax()]
     m = metricas["por_nodo"].get(str(nodo), {})
-    aviso = ""
+    dias_nodo = horas[horas.nodo == nodo].estudio.nunique()
+    nota = ""
     if es_festivo_oficial:
-        aviso += "📅 Esta fecha es festivo en Colombia; se estimó como festivo.\n\n"
+        nota += "📅 Esta fecha es **festivo** en Colombia, así que se calculó como festivo.\n\n"
     if n_tipo == 0:
-        aviso += (f"⚠️ **No hay ningún estudio de tipo «{NOMBRE_TIPO[tipo]}» en este nodo.** La estimación "
-                  "usa el patrón de los otros tipos de día y puede no representar ese día. Tómala con cautela.\n\n")
+        nota += (f"⚠️ **Ojo: en este punto nunca se ha medido el tráfico en un {NOMBRE_TIPO[tipo]}.** "
+                 "Por eso el cálculo usa lo que pasa en otros días y puede no parecerse a la realidad. "
+                 "Tómalo solo como una idea general.\n\n")
     elif n_tipo < 5:
-        aviso += f"⚠️ Solo hay {n_tipo} estudio(s) de tipo «{NOMBRE_TIPO[tipo]}» en este nodo: la estimación es poco robusta.\n\n"
-    aviso += (f"**Hora de más tráfico estimada: {franja(pico.hora)}**, con unos "
-              f"**{miles(pico.prediccion)} vehículos**.\n\n")
-    nota = aviso + (f"Método: **{'modelo (gradient boosting)' if metodo == 'modelo' else 'promedio histórico'}**. "
-            + (f"Error típico en la prueba con 2026: {str(m.get('wape_modelo' if metodo == 'modelo' else 'wape_rival')).replace('.', ',')} % "
-               f"del volumen ({m.get('estudios_test')} {'estudio no visto' if m.get('estudios_test') == 1 else 'estudios no vistos'} al entrenar)." if m else
-               "Este nodo no tiene estudios de 2026 para medir el error; úsese como referencia.")
-            + " Es una estimación del patrón típico, no un conteo real.")
+        nota += (f"⚠️ Solo hay {n_tipo} {'día medido' if n_tipo == 1 else 'días medidos'} de tipo "
+                 f"«{NOMBRE_TIPO[tipo]}» en este punto: el cálculo puede fallar más de lo normal.\n\n")
+    nota += (f"### Se espera más tráfico {hora_amigable(pico.hora)}: unos **{aproximar(pico.prediccion)} "
+             f"vehículos** en esa hora.\n\n")
+    if metodo == "modelo":
+        como = (f"**¿Cómo se calcula?** Con un modelo de inteligencia artificial que aprendió, a partir de "
+                f"{dias_nodo} días medidos en este punto, cómo cambia el tráfico según la hora, el día de la "
+                "semana, el mes y los festivos.")
+    else:
+        como = (f"**¿Cómo se calcula?** Con el promedio de lo que pasó, hora por hora, en los días medidos "
+                f"parecidos ({dias_nodo} días en este punto). Aquí funciona mejor que un modelo más complejo "
+                "porque hay pocos días medidos.")
+    if m:
+        w = m.get("wape_modelo" if metodo == "modelo" else "wape_rival")
+        n_test = m.get("estudios_test")
+        confianza = (f"**¿Qué tan confiable es?** Lo probamos con {n_test} "
+                     f"{'día' if n_test == 1 else 'días'} de 2026 que el cálculo no conocía: "
+                     f"{explicar_error(w)}." + (" Como solo se probó con un día, tómalo con cautela."
+                                                 if n_test == 1 else ""))
+    else:
+        confianza = ("**¿Qué tan confiable es?** No hay días de 2026 en este punto para comprobarlo, "
+                     "así que úsalo solo como referencia.")
+    nota += f"{como}\n\n{confianza}\n\n<small>Es lo esperado en un día típico, no el tráfico en vivo.</small>"
     return fig, nota
+
+
+def detalle_claro(tipo, detalle) -> str:
+    """'CAMION 0.8% vs 5.4% típico' -> 'Camiones: 0,8 % ese día, cuando lo normal es 5,4 %'."""
+    m = re.match(r"(\w+) ([\d.]+)% vs ([\d.]+)% típico(?: \((.*)\))?", str(detalle))
+    if tipo == "PARTICIPACION_ATIPICA" and m:
+        cat, hoy, normal, base = m.groups()
+        comparado = "en días del mismo tipo" if base == "mismo tipo de día" else "en este punto"
+        return (f"{CATEGORIAS.get(cat, cat.lower()).capitalize()}: {hoy.replace('.', ',')} % ese día, "
+                f"cuando lo normal {comparado} es {normal.replace('.', ',')} %")
+    if tipo == "CAMBIO_DE_METODO":
+        return "Se sumaron las bicicletas de la ciclorruta: el total de bicis no se puede comparar con otros días"
+    if tipo == "ID_REPETIDO":
+        return str(detalle).replace("ID SDM", "El número de estudio").replace("repetido en varias fechas",
+                                                                           "se usó también en otras fechas")
+    return str(detalle)
 
 
 def calidad():
     _, resumen, alertas, *_ = cargar()
-    a = alertas.assign(explicacion=alertas.tipo_alerta.map(EXPLICACION_ALERTA))
-    conteo = (a.groupby(["nodo", "tipo_alerta", "explicacion"]).estudio.nunique()
-                .reset_index(name="estudios")
-                .rename(columns={"nodo": "Nodo", "tipo_alerta": "Tipo", "explicacion": "Qué significa",
-                                 "estudios": "Estudios afectados"}))
-    detalle = a[["nodo", "estudio", "tipo_alerta", "detalle"]].rename(
-        columns={"nodo": "Nodo", "estudio": "Estudio", "tipo_alerta": "Tipo", "detalle": "Detalle"})
+    a = alertas.assign(nombre=alertas.tipo_alerta.map(NOMBRE_ALERTA),
+                       explicacion=alertas.tipo_alerta.map(EXPLICACION_ALERTA),
+                       lugar=alertas.nodo.map(ETIQUETA_NODO))
+    conteo = (a.groupby(["lugar", "nombre", "explicacion"]).estudio.nunique()
+                .reset_index(name="dias")
+                .rename(columns={"lugar": "Lugar", "nombre": "Problema", "explicacion": "Qué significa",
+                                 "dias": "Días afectados"}))
+    a["detalle_claro"] = [detalle_claro(t, d) for t, d in zip(a.tipo_alerta, a.detalle)]
+    a["fecha"] = a.estudio.str.extract(r"_(\d{8})_")[0].map(lambda x: f"{x[:4]}-{x[4:6]}-{x[6:]}")
+    detalle = a[["lugar", "fecha", "nombre", "detalle_claro", "estudio"]].rename(
+        columns={"lugar": "Lugar", "fecha": "Fecha", "nombre": "Problema", "detalle_claro": "Qué se encontró",
+                 "estudio": "Código del estudio"})
     return conteo, detalle
 
 
@@ -214,27 +286,39 @@ with gr.Blocks(title="Bogotá se Mueve") as demo:
             "¿A qué hora hay más tráfico en la Autopista Norte con 170 un día hábil?",
             "¿Qué pasó en la Vía a Cota con 116 los días de lluvia?",
             "¿Qué porcentaje de motos pasa por la Av. 68 con 72?",
-            "¿Qué es un auto equivalente (ACE)?"])
-    with gr.Tab("Explorar nodo"):
+            "¿Qué es un auto equivalente (ACE)?",
+            "¿Los datos de aforos tienen errores?"])
+    with gr.Tab("Explorar un punto"):
         with gr.Row():
-            n1 = gr.Dropdown(OPCIONES_NODO, value=OPCIONES_NODO[0], label="Nodo")
+            n1 = gr.Dropdown(OPCIONES_NODO, value=OPCIONES_NODO[0], label="Punto de la ciudad (nodo)")
             t1 = gr.Radio(list(TIPOS_DIA), value="Día hábil", label="Tipo de día")
-        g1, tab1 = gr.Plot(), gr.Dataframe(wrap=True)
+        guia1 = gr.Markdown()
+        g1 = gr.Plot()
+        gr.Markdown("**Días medidos en este punto.** Cada fila es un día en que la Secretaría de Movilidad "
+                    "contó los vehículos. Si dice «No, solo algunas horas», ese día no se contó completo y por "
+                    "eso no tiene total.")
+        tab1 = gr.Dataframe(wrap=True)
         for c in (n1, t1):
-            c.change(explorar, [n1, t1], [g1, tab1])
-        demo.load(explorar, [n1, t1], [g1, tab1])
-    with gr.Tab("Predecir"):
+            c.change(explorar, [n1, t1], [guia1, g1, tab1])
+        demo.load(explorar, [n1, t1], [guia1, g1, tab1])
+    with gr.Tab("¿Cómo estará?"):
+        gr.Markdown("Elige un punto y una fecha para ver cuánto tráfico se espera en cada hora de un día típico.")
         with gr.Row():
-            n2 = gr.Dropdown(OPCIONES_NODO, value=OPCIONES_NODO[0], label="Nodo")
+            n2 = gr.Dropdown(OPCIONES_NODO, value=OPCIONES_NODO[0], label="Punto de la ciudad (nodo)")
             f2 = gr.Textbox(value=str(pd.Timestamp.today().date()), label="Fecha (AAAA-MM-DD)")
             fe2 = gr.Checkbox(label="Es festivo (los festivos oficiales se detectan solos)")
-        b2 = gr.Button("Estimar")
+        b2 = gr.Button("Ver el tráfico esperado", variant="primary")
         nota2 = gr.Markdown()   # el aviso va ARRIBA del gráfico, para que se lea sin bajar
         g2 = gr.Plot()
         b2.click(predecir, [n2, f2, fe2], [g2, nota2])
     with gr.Tab("Calidad de datos"):
-        gr.Markdown("Anomalías encontradas en los archivos oficiales. Se documentan; no se corrigen en silencio.")
-        c1, c2 = gr.Dataframe(label="Resumen"), gr.Dataframe(label="Detalle", wrap=True)
+        gr.Markdown("### ¿Qué tan confiables son los datos?\n"
+                    "Al revisar los archivos oficiales de la Secretaría de Movilidad encontramos errores. "
+                    "**No los escondemos ni los corregimos a escondidas:** los mostramos aquí para que sepas "
+                    "qué tan confiable es cada cifra. Cuando un día tiene una alerta, también aparece en la tabla "
+                    "de «Explorar nodo».")
+        c1 = gr.Dataframe(label="Resumen por lugar", wrap=True)
+        c2 = gr.Dataframe(label="Detalle día por día", wrap=True)
         demo.load(calidad, None, [c1, c2])
     with gr.Tab("Acerca de"):
         gr.Markdown((RAIZ / "docs" / "acerca.md").read_text(encoding="utf-8"))

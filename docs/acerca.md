@@ -34,3 +34,12 @@ Integrantes:
 - Laura Ximena Cifuentes Chauta
 - Luis Alejandro Flórez Rivera
 - Luwin Alfonso Ruiz Pinzón
+
+## ¿Qué es «Usar vía API»?
+Al pie de la página aparece el enlace «Usar vía API». Es una puerta para que **otros programas** (no personas) consulten esta herramienta de forma automática: por ejemplo, un sistema de la Alcaldía o la app de otra persona podría preguntar la hora de más tráfico de un punto y recibir la respuesta sin abrir esta página. Al hacer clic se ven ejemplos de código para hacerlo. Para usar la herramienta normalmente no hace falta.
+
+## Palabras que usamos
+- **Normalmente (mediana):** si se ordenan los días medidos de menor a mayor, es el valor del día que queda en la mitad. Un día raro casi no la mueve.
+- **Rango habitual:** lo que pasó en la mitad central de los días medidos.
+- **Día medido (estudio):** un día en que la Secretaría de Movilidad contó, uno por uno, los vehículos de un cruce.
+- **Aforador:** la persona que hace ese conteo en la calle.

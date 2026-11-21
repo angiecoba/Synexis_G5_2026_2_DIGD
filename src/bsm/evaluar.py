@@ -26,7 +26,7 @@ def cumple(criterio, texto: str) -> bool:
 
 
 def tiene_fuente(texto: str) -> bool:
-    return bool(re.search(r"fuente|\[estudio|\[[\w_]+\.md\]|observatorio", texto, re.I))
+    return bool(re.search(r"fuente|\[estudio|estudio \d+_|\[[\w_]+\.md\]|observatorio", texto, re.I))
 
 
 def calificar(fila, respuesta: str):

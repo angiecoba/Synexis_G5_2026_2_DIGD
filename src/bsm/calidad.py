@@ -47,23 +47,33 @@ def validar_vol_data(vol: pd.DataFrame):
 
 def validar_plausibilidad(df: pd.DataFrame, umbral: float = 4.0, minimo: int = 500) -> pd.DataFrame:
     """Compara la participación de cada categoría en un estudio contra la mediana de los
-    demás estudios del mismo nodo. Marca desviaciones > `umbral` veces (con al menos
-    `minimo` vehículos). Detecta columnas corridas o mal etiquetadas; NO corrige nada."""
+    demás estudios del MISMO nodo y del MISMO tipo de día (hábil, fin de semana, festivo).
+    Así un 25 de diciembre con pocos camiones se compara con otros festivos, no con un martes.
+    Si hay menos de 3 estudios de ese tipo, se compara con todos los del nodo.
+    Marca desviaciones > `umbral` veces (con al menos `minimo` vehículos). NO corrige nada."""
     v = df[(df.tipo_estudio == "VOL") & (df.fecha == df.fecha_estudio)
            & df.periodo.between(500, 2245)].copy()
-    # Bicis en calzada como un solo grupo; la ciclorruta se reporta aparte (cambio de método).
     cicloinfra = v[v.categoria == "BICI_CICLOINFRA"].groupby(["nodo", "estudio"])["conteo"].sum()
     v = v[v.categoria != "BICI_CICLOINFRA"]
     v["categoria"] = v["categoria"].replace({"BICI_SIN_DETALLE": "BICI_CALZADA"})
     tab = v.pivot_table(index=["nodo", "estudio"], columns="categoria",
                         values="conteo", aggfunc="sum").fillna(0)
     part = tab.div(tab.sum(axis=1), axis=0)
+    info = v.groupby("estudio").agg(fecha=("fecha_estudio", "first"), festivo=("festivo", "first"))
+    fechas = pd.to_datetime(info.fecha)
+    tipo = pd.Series(["festivo" if f is True else ("finde" if d >= 5 else "habil")
+                      for f, d in zip(info.festivo, fechas.dt.dayofweek)], index=info.index)
     filas = []
     for nodo, sub in part.groupby(level=0):
         if len(sub) < 3:
             continue
-        for est in sub.index:
-            otros = sub.drop(index=est).median()
+        tipos = tipo.reindex(sub.index.get_level_values(1)).to_numpy()
+        for i, est in enumerate(sub.index):
+            pares = sub[(tipos == tipos[i])].drop(index=est, errors="ignore")
+            base = "mismo tipo de día"
+            if len(pares) < 3:
+                pares, base = sub.drop(index=est), "todos los días"
+            otros = pares.median()
             for cat in sub.columns:
                 obs, ref = sub.loc[est, cat], otros[cat]
                 if max(tab.loc[est, cat], ref * tab.loc[est].sum()) < minimo:
@@ -72,7 +82,7 @@ def validar_plausibilidad(df: pd.DataFrame, umbral: float = 4.0, minimo: int = 5
                 if razon > umbral or razon < 1 / umbral:
                     filas.append({"nodo": nodo, "estudio": est[1], "categoria": cat,
                                   "tipo_alerta": "PARTICIPACION_ATIPICA",
-                                  "detalle": f"{cat} {100*obs:.1f}% vs {100*ref:.1f}% típico"})
+                                  "detalle": f"{cat} {100*obs:.1f}% vs {100*ref:.1f}% típico ({base})"})
     for (nodo, est), n in cicloinfra.items():
         if n > 0:
             filas.append({"nodo": nodo, "estudio": est, "categoria": "BICI_CICLOINFRA",

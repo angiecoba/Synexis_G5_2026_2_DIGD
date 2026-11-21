@@ -32,6 +32,7 @@ src/bsm/
   modelo.py          modelo + rival + métricas  ->  python -m bsm.modelo
   preparar_app.py    carpeta liviana de la app  ->  python -m bsm.preparar_app
   rag.py             enrutador, búsqueda con cita y LLM opcional
+  lenguaje.py        traduce cifras a lenguaje ciudadano (horas, "2 de cada 10", qué es la mediana)
   evaluar.py         califica el asistente con evaluacion/preguntas.csv -> python -m bsm.evaluar
 app.py               app Gradio (Asistente · Explorar · Predecir · Calidad · Acerca de)
 tests/               reglas críticas de limpieza (pytest)

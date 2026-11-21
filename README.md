@@ -26,7 +26,7 @@ Este documento está escrito para dos públicos:
 12. [¿Funciona en el celular?](#12-funciona-en-el-celular)
 13. [Limitaciones actuales](#13-limitaciones-actuales)
 14. [Próximos pasos y mayor alcance](#14-próximos-pasos-y-mayor-alcance)
-15. [Qué se aplicó del curso y dónde](#15-qué-se-aplicó-del-curso-y-dónde)
+15. [Qué se aplicó del curso MGIN (Datos & IA) y dónde](#15-qué-se-aplicó-del-curso-mgin-datos--ia-y-dónde)
 16. [Cómo correrlo y actualizarlo](#16-cómo-correrlo-y-actualizarlo)
 17. [Autores](#17-autores)
 
@@ -325,11 +325,11 @@ Recomendamos que el equipo lo pruebe en un teléfono Android y en un iPhone ante
 9. **Descarga automática** y actualización periódica, con un aviso cuando llegue un archivo con formato nuevo.
 10. **Mejor servidor** (plan pago o institucional), para que no se duerma y para poder agregar inicio de sesión y registro de uso.
 
-## 15. Qué se aplicó del curso y dónde
+## 15. Qué se aplicó del curso MGIN (Datos & IA) y dónde
 
 Las prácticas del curso se usaron como **referencia, no como camisa de fuerza**: se aplicó cada una solo si servía al reto.
 
-**Curso Datos & Inteligencia Artificial (MGIN 2026-2)**
+Curso **Datos & Inteligencia Artificial (MGIN 2026-2)**.
 
 | Idea del curso | Dónde se aplicó |
 |---|---|
@@ -347,22 +347,6 @@ Las prácticas del curso se usaron como **referencia, no como camisa de fuerza**
 | Una app son tres piezas: la cara (Gradio), el cerebro (búsqueda y prompt), el modelo (API) | `app.py` + `rag.py` + LLM opcional por API |
 | `share=True` no es producción: autenticación, costo, documentos en el código, registro | Despliegue en Render, documentos en `docs/`, claves fuera del código. Autenticación y registro quedan en limitaciones y próximos pasos. |
 | Qué datos no deben salir / la responsabilidad es de quien firma | No se publican nombres de funcionarios de las fichas de la SDM. Modo sin LLM por defecto. Cita en cada respuesta. |
-
-**Guías DataOps & MLOps del curso**
-
-| Guía | ¿Se aplicó? | Dónde / por qué |
-|---|---|---|
-| GitHub | Sí | Repositorio como referencia global del equipo, con commits pequeños. |
-| Trampas de Python | Sí | Funciones puras (`df.copy()`), sin valores por defecto mutables, rutas con `pathlib`. |
-| Notebooks | Parcial | El código vive en módulos `.py`; los notebooks son solo para explorar. |
-| Pandera | Sí | Contrato de datos en `calidad.py`. |
-| Pipelines | Sí | `Pipeline` de scikit-learn y un pipeline de datos con auditoría. |
-| Serialización | Sí | Modelo guardado con joblib; la app no reentrena. |
-| DevOps / CI | Sí | GitHub Actions corre `pytest` en cada push. |
-| Logging | Ligero | Bitácora JSONL de cada archivo procesado. |
-| APIs | Vía Gradio | El enlace «Usar vía API» expone la app a otros programas. No se hizo FastAPI. |
-| Hugging Face | No | Nadie del equipo tiene cuenta; se usó Render. |
-| Docker | No | Render arma el entorno desde `requirements.txt`. |
 
 ## 16. Cómo correrlo y actualizarlo
 

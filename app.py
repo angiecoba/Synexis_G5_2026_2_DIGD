@@ -450,7 +450,9 @@ def responder(pregunta, historial):
     if intencion(pregunta) == "calculo":
         if detectar_nodo(pregunta) is None and not re.search(
                 r"trafic|vehicul|carro|moto|bus|camion|bici|hora|pico|congest|movil|aforo|flujo", normalizar(pregunta)):
-            return "No tengo ese dato en las fuentes disponibles.\n\n" + CAPACIDADES
+            r = responder_contexto(buscador, pregunta)  # p. ej. «¿cuánto tarda?»: puede estar en los documentos
+            return r if not r.startswith("No tengo ese dato") else (
+                "No tengo ese dato en las fuentes disponibles.\n\n" + CAPACIDADES)
         return responder_calculo(pregunta)
     r = responder_contexto(buscador, pregunta)
     if r.startswith("No tengo ese dato"):
@@ -671,6 +673,8 @@ def calidad():
 with gr.Blocks(title="Bogotá se Mueve") as demo:
     gr.Markdown("# Bogotá se Mueve\nDatos de aforos del Observatorio de Movilidad de Bogotá, "
                 "explicados en lenguaje claro y con su fuente.\n\n"
+                "**Alcance:** 6 cruces del norte y noroccidente de Bogotá · conteos de **sep-2021 a nov-2026** · "
+                "describe un día típico, no el tráfico en vivo. Más detalles en «Acerca de».\n\n"
                 "<small>Mesa 1 · DIGD · Docente: Nelson Gustavo Fajardo Belmonte · Angie Valentina Coba Perdomo, "
                 "Diego Alejandro Sánchez Parra, Laura Ximena Cifuentes Chauta, Luis Alejandro Flórez Rivera, "
                 "Luwin Alfonso Ruiz Pinzón · Synexis · Tech Innovate Summit, Escuela Colombiana de Ingeniería "

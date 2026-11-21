@@ -212,7 +212,7 @@ def presentar(hits) -> str:
             partes = f.texto.lstrip("#- ").split("\n", 1)
             titulo, cuerpo = (partes + [""])[:2]
             cuerpo = cuerpo.strip() or titulo
-            docs.append(f"**{titulo.strip().rstrip(':')}.** {cuerpo} <small>(fuente: {f.fuente.replace('.md', '')})</small>")
+            docs.append(f"**{titulo.strip().rstrip(':')}{'' if titulo.strip().endswith(('?', '.')) else '.'}** {cuerpo} <small>(fuente: {f.fuente.replace('.md', '')})</small>")
     salida = []
     if notas:
         salida.append(f"Esto anotaron las personas que contaron los vehículos en la calle "

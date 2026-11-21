@@ -32,8 +32,8 @@ P03,cálculo,¿A qué hora hay más tráfico en la carrera 7 con calle 208 un fi
 P04,contexto,¿Qué pasó en la Vía a Cota con 116 los días de lluvia?,"Esto anotaron las personas que contaron los vehículos en la calle (aforadores) en **Vía a Cota con Cra 116**:
 
 - 📅 **21 de marzo de 2025**, entrada por el occidente: «inicia fuerte aguacero» <small>(estudio 663_20250321_VOL_v2)</small>
-- 📅 **20 de abril de 2025**, entrada por el occidente: «llueve 15:11» <small>(estudio 663_20250420_VOL)</small>
 - 📅 **20 de abril de 2025**, entrada por el oriente: «llueve 15:11» <small>(estudio 663_20250420_VOL)</small>
+- 📅 **20 de abril de 2025**, entrada por el occidente: «llueve 15:11» <small>(estudio 663_20250420_VOL)</small>
 - 📅 **31 de diciembre de 2023**, entrada por el occidente: «llueve alas 14:15» <small>(estudio 663_20231231_VOL)</small>
 - 📅 **20 de abril de 2025**, entrada por el oriente: «deja de llover» <small>(estudio 663_20250420_VOL)</small>
 
@@ -45,12 +45,9 @@ P05,contexto,¿Hubo accidentes en la Autopista Norte con 170?,"Esto anotaron las
 ℹ️ Son notas escritas durante los conteos. Solo cubren los días en que hubo medición, así que pudo haber otros casos que no quedaron registrados.",1,True
 P06,concepto,¿Qué es un auto equivalente (ACE)?,"**Auto equivalente (ACE).** Unidad que convierte cada tipo de vehículo en ""carros equivalentes"" según el espacio que ocupa en la vía. Un carro vale 1, una moto 0,5, un bus 2 y un camión o un articulado 2,5. Los factores salen de cada archivo de la SDM. <small>(fuente: glosario)</small>",2,True
 P07,calidad,¿Los datos de aforos de la Secretaría de Movilidad tienen errores?,"**Dónde están los datos de aforos.** Los aforos vehiculares de la SDM se publican en el visor de volúmenes del Observatorio de Movilidad (observatorio.movilidadbogota.gov.co), donde se descargan archivo por archivo. No aparecen como conjunto de datos en el portal Datos Abiertos Bogotá ni en el hub de datos abiertos de la SDM, y el Catálogo de Objetos de la SDM (versión 1.1, abril de 2026) no los incluye. <small>(fuente: diagnostico_calidad)</small>
-**Acerca de Bogotá se Mueve.** Proyecto académico para el reto de datos de la Alcaldía de Bogotá sobre confianza y apropiación de los datos públicos. Toma los aforos que publica la Secretaría Distrital de Movilidad y los presenta en lenguaje claro, con la fuente de cada cifra. <small>(fuente: acerca)</small>
-**Fuentes.** - Aforos vehiculares: visor de volúmenes del Observatorio de Movilidad, Secretaría Distrital de Movilidad.
-- Festivos: calendario oficial de Colombia. <small>(fuente: acerca)</small>
-**Limitaciones.** - Los aforos son días puntuales, no un conteo continuo: las estimaciones describen un día típico, no el tráfico de hoy.
-- Los archivos oficiales tienen problemas de calidad documentados en la pestaña ""Calidad de datos"".
-- La herramienta no publica nombres de personas que aparecen en los archivos de la SDM. <small>(fuente: acerca)</small>",0,True
+**Fuentes.** - Conteos de vehículos (aforos): visor de volúmenes del Observatorio de Movilidad, Secretaría Distrital de Movilidad.
+- Festivos: calendario oficial de Colombia.
+- Mapa base: © OpenStreetMap y © CARTO. <small>(fuente: acerca)</small>",0,True
 P08,fuente,¿Dónde puedo descargar los aforos vehiculares de Bogotá?,"**Dónde están los datos de aforos.** Los aforos vehiculares de la SDM se publican en el visor de volúmenes del Observatorio de Movilidad (observatorio.movilidadbogota.gov.co), donde se descargan archivo por archivo. No aparecen como conjunto de datos en el portal Datos Abiertos Bogotá ni en el hub de datos abiertos de la SDM, y el Catálogo de Objetos de la SDM (versión 1.1, abril de 2026) no los incluye. <small>(fuente: diagnostico_calidad)</small>",2,True
 P09,fuera de alcance,¿Cuál es el precio del pasaje de TransMilenio?,"No tengo ese dato en las fuentes disponibles.
 

@@ -27,7 +27,7 @@ from bsm.lenguaje import (EXPLICA_MEDIANA, EXPLICA_RANGO, CATEGORIAS, aproximar,
                           de_cada_10, explicar_error, hora_amigable)
 from bsm.modelo import predecir_dia  # noqa: E402
 from bsm.rag import (ETIQUETA_NODO, Buscador, construir_corpus, detectar_nodo,  # noqa: E402
-                     intencion, responder_contexto)
+                     intencion, normalizar, responder_contexto)
 
 APP_DATOS = Path(os.getenv("BSM_APP", RAIZ / "data" / "app"))
 OPCIONES_NODO = [f"{n} · {e}" for n, e in ETIQUETA_NODO.items()]
@@ -66,6 +66,19 @@ def cargar():
     return horas, resumen, alertas, artefacto, metricas, buscador
 
 
+@lru_cache(maxsize=1)
+def cargar_extra():
+    """Proporción de cada tipo de vehículo por hora y ubicación de los nodos."""
+    mezcla = pd.read_parquet(APP_DATOS / "mezcla.parquet")
+    nodos = pd.read_csv(APP_DATOS / "nodos.csv")
+    nodos["lugar"] = nodos.nodo.map(ETIQUETA_NODO)
+    return mezcla, nodos
+
+
+COLORES_VEHICULO = {"Carros y camionetas": "#4C78A8", "Motos": "#F58518", "Buses": "#54A24B",
+                    "Camiones": "#B279A2"}
+ORDEN_VEHICULO = list(COLORES_VEHICULO)
+
 HORAS_24 = [f"{h:02d}:00" for h in range(24)]
 
 
@@ -95,6 +108,136 @@ def perfil_historico(horas, nodo, tipo):
     return (por_estudio.groupby("hora").veh.agg(mediana="median", p25=lambda s: s.quantile(.25),
                                                  p75=lambda s: s.quantile(.75), estudios="count")
             .reset_index())
+
+
+def figura_mapa(nodo=None):
+    """Mapa de los 6 puntos; si se indica un nodo, se resalta."""
+    _, nodos = cargar_extra()
+    n = nodos.assign(resaltado=nodos.nodo.eq(nodo) if nodo else True)
+    n["tamano"] = n.resaltado.map({True: 18, False: 10})
+    n["texto"] = [f"{r.lugar}<br>Nodo {r.nodo} · {r.dias} días medidos" for r in n.itertuples()]
+    centro = n[n.nodo == nodo].iloc[0] if nodo else n[["lat", "lon"]].mean()
+    fig = px.scatter_map(n, lat="lat", lon="lon", size="tamano", size_max=18,
+                         color="resaltado" if nodo else None, hover_name="texto",
+                         hover_data={"lat": False, "lon": False, "tamano": False, "resaltado": False},
+                         color_discrete_map={True: "#E4572E", False: "#7F7F7F"},
+                         zoom=14 if nodo else 10.5, center={"lat": centro.lat, "lon": centro.lon},
+                         map_style="carto-positron", height=420)
+    fig.update_layout(margin=dict(l=0, r=0, t=30, b=0), showlegend=False,
+                      title=(f"Ubicación · {ETIQUETA_NODO[nodo]}" if nodo else "Los 6 puntos de Bogotá con datos"))
+    return fig
+
+
+def figura_perfil(nodo, tipo):
+    horas, *_ = cargar()
+    p = perfil_historico(horas, nodo, tipo)
+    fig = px.bar(p, x="hora", y="mediana", labels={"mediana": "Vehículos por hora"},
+                 title=f"Tráfico normal por hora · {ETIQUETA_NODO[nodo]} · {NOMBRE_TIPO[tipo]}")
+    pico = p.mediana.idxmax() if len(p) else None
+    fig.update_traces(marker_color=["#E4572E" if i == pico else "#4C78A8" for i in p.index],
+                      customdata=[hora_amigable(h) for h in p.hora],
+                      hovertemplate="%{customdata}<br>Normalmente: %{y:,.0f} vehículos<extra></extra>")
+    return eje_horas(fig), p
+
+
+def desglose(nodo, tipo, total_por_hora: pd.DataFrame):
+    """Reparte un total por hora según la proporción histórica de cada tipo de vehículo
+    en días parecidos del mismo punto. Devuelve (tabla larga, tipo de día usado)."""
+    mezcla, _ = cargar_extra()
+    m = mezcla[(mezcla.nodo == nodo) & (mezcla.tipo_dia == tipo)]
+    usado = tipo
+    if m.empty:  # sin días de ese tipo: se usan los días hábiles, y se avisa
+        m, usado = mezcla[(mezcla.nodo == nodo) & (mezcla.tipo_dia == "habil")], "habil"
+    d = total_por_hora.merge(m[["hora", "grupo", "proporcion"]], on="hora", how="left")
+    d["vehiculos"] = d.total * d.proporcion
+    return d.dropna(subset=["grupo"]), usado
+
+
+def enumerar(partes: list[str]) -> str:
+    return partes[0] if len(partes) == 1 else ", ".join(partes[:-1]) + " y " + partes[-1]
+
+
+def figura_desglose(d, titulo):
+    fig = px.bar(d, x="hora", y="vehiculos", color="grupo", title=titulo,
+                 category_orders={"grupo": ORDEN_VEHICULO}, color_discrete_map=COLORES_VEHICULO,
+                 labels={"vehiculos": "Vehículos", "grupo": "Tipo de vehículo"})
+    fig.update_traces(hovertemplate="%{fullData.name}: %{y:,.0f}<extra></extra>")
+    fig.update_layout(barmode="stack", hovermode="x unified", legend_title_text="")
+    return eje_horas(fig)
+
+
+CAPACIDADES = (
+    "Puedo ayudarte con estos 6 puntos de Bogotá: " + ", ".join(ETIQUETA_NODO.values()) + ".\n\n"
+    "Prueba, por ejemplo:\n"
+    "- «¿A qué hora hay más tráfico en la Autopista Norte con 170?»\n"
+    "- «Muéstrame una gráfica de las horas de la Av. 68 con 72»\n"
+    "- «¿Qué tipos de vehículos pasan por la Vía a Cota?»\n"
+    "- «Muéstrame el mapa de los puntos»\n"
+    "- «¿Qué pasó en la carrera 7 con 208 los días de lluvia?»\n"
+    "- «¿Qué es un auto equivalente?»\n\n"
+    "No tengo tráfico en vivo, precios, rutas ni datos de otros puntos de la ciudad.")
+
+
+def que_pide(pregunta: str):
+    """Pedidos de visualización que el asistente resuelve con datos (sin LLM)."""
+    q = normalizar(pregunta)
+    if re.search(r"\bmapa\b", q):
+        return "mapa"
+    if re.search(r"grafic|curva|dibuj|visualiz", q):
+        return "grafica"
+    if re.search(r"tipos? de vehiculo|que vehiculos|desglose|composicion|cuantos carros|cuantos buses|"
+                 r"cuantos camiones|cuantas motos", q):
+        return "vehiculos"
+    if re.search(r"ubicacion|donde (queda|esta|estan)|localiza", q):
+        return "mapa"
+    if re.search(r"que puedes|que sabes|ayuda|como te uso|que preguntas", q):
+        return "ayuda"
+    return None
+
+
+def tipo_de_dia_en(pregunta: str) -> str:
+    q = normalizar(pregunta)
+    if re.search(r"sabado|domingo|fin de semana", q):
+        return "finde"
+    return "festivo" if "festivo" in q else "habil"
+
+
+def pedir_punto(accion: str) -> str:
+    return (f"¿De qué punto quieres {accion}? Escríbelo nombrando uno de estos lugares:\n\n"
+            + "\n".join(f"- {e}" for e in ETIQUETA_NODO.values()))
+
+
+def responder_visual(pedido: str, pregunta: str):
+    nodo, tipo = detectar_nodo(pregunta), tipo_de_dia_en(pregunta)
+    if pedido == "ayuda":
+        return CAPACIDADES
+    if pedido == "mapa":
+        texto = (f"Este es **{ETIQUETA_NODO[nodo]}** (en rojo) junto a los otros puntos con datos. "
+                 "Pasa el mouse sobre cada punto para ver su nombre y cuántos días se midió."
+                 if nodo else "Estos son los **6 puntos de Bogotá** donde la Secretaría de Movilidad ha contado "
+                              "vehículos y que analiza esta herramienta. Pasa el mouse sobre cada punto para ver "
+                              "su nombre y cuántos días se midió.")
+        return [texto + "\n\n<small>La ubicación sale de las fichas de los estudios de la Secretaría.</small>",
+                gr.Plot(figura_mapa(nodo))]
+    if nodo is None:
+        return pedir_punto("ver la gráfica" if pedido == "grafica" else "ver los tipos de vehículo")
+    fig, p = figura_perfil(nodo, tipo)
+    if p.empty:
+        return (f"Todavía no hay días medidos de tipo «{NOMBRE_TIPO[tipo]}» en {ETIQUETA_NODO[nodo]}. "
+                "Prueba con otro tipo de día.")
+    pico = p.loc[p.mediana.idxmax()]
+    if pedido == "grafica":
+        return [f"Tráfico normal en **{ETIQUETA_NODO[nodo]}** ({NOMBRE_TIPO[tipo]}), hora por hora. La barra roja "
+                f"es la hora con más tráfico: **{hora_amigable(pico.hora)}**, con unos "
+                f"**{aproximar(pico.mediana)} vehículos**. Se basa en {int(pico.estudios)} días medidos.",
+                gr.Plot(fig)]
+    d, usado = desglose(nodo, tipo, p.rename(columns={"mediana": "total"})[["hora", "total"]])
+    en_pico = d[d.hora == pico.hora].set_index("grupo").vehiculos.reindex(ORDEN_VEHICULO).dropna()
+    partes = enumerar([f"unos {aproximar(v)} {g.lower()}" for g, v in en_pico.items()])
+    return [f"En **{ETIQUETA_NODO[nodo]}** ({NOMBRE_TIPO[tipo]}), en la hora con más tráfico "
+            f"({hora_amigable(pico.hora)}) pasan normalmente {partes}.\n\n"
+            "<small>Cada color es un tipo de vehículo; la altura total de la barra es el tráfico normal de esa hora.</small>",
+            gr.Plot(figura_desglose(d, f"Tipos de vehículo por hora · {ETIQUETA_NODO[nodo]} · {NOMBRE_TIPO[tipo]}"))]
 
 
 # ------------------------------------------------------------------ asistente
@@ -137,9 +280,25 @@ def responder_calculo(pregunta: str) -> str:
 
 def chat(pregunta, historial):
     *_, buscador = cargar()
+    pedido = que_pide(pregunta)
+    if pedido is None and detectar_nodo(pregunta) is not None:  # respuesta a «¿De qué punto…?»
+        ultimo = next((str(m.get("content", "")) for m in reversed(historial or [])
+                       if isinstance(m, dict) and m.get("role") == "assistant"), "")
+        if "¿De qué punto quieres ver la gráfica" in ultimo:
+            pedido = "grafica"
+        elif "¿De qué punto quieres ver los tipos de vehículo" in ultimo:
+            pedido = "vehiculos"
+    if pedido:
+        return responder_visual(pedido, pregunta)
     if intencion(pregunta) == "calculo":
+        if detectar_nodo(pregunta) is None and not re.search(
+                r"trafic|vehicul|carro|moto|bus|camion|bici|hora|pico|congest|movil|aforo|flujo", normalizar(pregunta)):
+            return "No tengo ese dato en las fuentes disponibles.\n\n" + CAPACIDADES
         return responder_calculo(pregunta)
-    return responder_contexto(buscador, pregunta)
+    r = responder_contexto(buscador, pregunta)
+    if r.startswith("No tengo ese dato"):
+        return "No tengo ese dato en las fuentes disponibles.\n\n" + CAPACIDADES
+    return r
 
 
 # ------------------------------------------------------------------ explorar / predecir
@@ -187,7 +346,7 @@ def predecir(opcion, fecha, festivo):
     try:
         f = pd.Timestamp(fecha)
     except ValueError:
-        return None, "Escribe la fecha como AAAA-MM-DD, por ejemplo 2026-12-08."
+        return None, "Escribe la fecha como AAAA-MM-DD, por ejemplo 2026-12-08.", "", None
     es_festivo_oficial = bool(FESTIVOS and f in FESTIVOS)
     festivo = bool(festivo) or es_festivo_oficial
     tipo = "festivo" if festivo else ("finde" if f.dayofweek >= 5 else "habil")
@@ -236,7 +395,17 @@ def predecir(opcion, fecha, festivo):
         confianza = ("**¿Qué tan confiable es?** No hay días de 2026 en este punto para comprobarlo, "
                      "así que úsalo solo como referencia.")
     nota += f"{como}\n\n{confianza}\n\n<small>Es lo esperado en un día típico, no el tráfico en vivo.</small>"
-    return fig, nota
+    d, usado = desglose(nodo, tipo, tot.rename(columns={"prediccion": "total"}))
+    en_pico = d[d.hora == pico.hora].set_index("grupo").vehiculos.reindex(ORDEN_VEHICULO).dropna()
+    nota_v = ("### ¿Qué vehículos serían?\n"
+              "En la hora de más tráfico serían " + enumerar([f"unos **{aproximar(v)} {g.lower()}**"
+                                                         for g, v in en_pico.items()]) + ".\n\n"
+              "<small>**Cómo se calcula:** el total estimado de cada hora se reparte según la proporción de "
+              "carros, motos, buses y camiones que se ha observado en días parecidos en este punto."
+              + (f" Como no hay días medidos de tipo «{NOMBRE_TIPO[tipo]}», se usó la proporción de los días "
+                 "hábiles." if usado != tipo else "") + "</small>")
+    fig_v = figura_desglose(d, "Tipos de vehículo por hora (estimado)")
+    return fig, nota, nota_v, fig_v
 
 
 def detalle_claro(tipo, detalle) -> str:
@@ -287,7 +456,9 @@ with gr.Blocks(title="Bogotá se Mueve") as demo:
             "¿Qué pasó en la Vía a Cota con 116 los días de lluvia?",
             "¿Qué porcentaje de motos pasa por la Av. 68 con 72?",
             "¿Qué es un auto equivalente (ACE)?",
-            "¿Los datos de aforos tienen errores?"])
+            "Muéstrame el mapa de los puntos",
+            "¿Qué tipos de vehículos pasan por la Vía a Cota?",
+            "Muéstrame una gráfica de las horas de la Av. 68 con 72"])
     with gr.Tab("Explorar un punto"):
         with gr.Row():
             n1 = gr.Dropdown(OPCIONES_NODO, value=OPCIONES_NODO[0], label="Punto de la ciudad (nodo)")
@@ -310,7 +481,9 @@ with gr.Blocks(title="Bogotá se Mueve") as demo:
         b2 = gr.Button("Ver el tráfico esperado", variant="primary")
         nota2 = gr.Markdown()   # el aviso va ARRIBA del gráfico, para que se lea sin bajar
         g2 = gr.Plot()
-        b2.click(predecir, [n2, f2, fe2], [g2, nota2])
+        nota3 = gr.Markdown()
+        g3 = gr.Plot()
+        b2.click(predecir, [n2, f2, fe2], [g2, nota2, nota3, g3])
     with gr.Tab("Calidad de datos"):
         gr.Markdown("### ¿Qué tan confiables son los datos?\n"
                     "Al revisar los archivos oficiales de la Secretaría de Movilidad encontramos errores. "

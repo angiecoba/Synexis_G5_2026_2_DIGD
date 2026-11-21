@@ -37,7 +37,7 @@ src/bsm/
 app.py               app Gradio (Asistente · Explorar · Predecir · Calidad · Acerca de)
 tests/               reglas críticas de limpieza (pytest)
 docs/                glosario, diagnóstico y acerca de (el asistente los cita)
-docs/equipo/         convenciones, próximos pasos, diccionario de vehículos
+docs/equipo/         documentos de trabajo internos del equipo
 scripts/             descarga de siniestros del SIMUR
 data/app/           datos livianos de la app (~3 MB, SÍ en Git)
 data/raw, data/processed, models/   fuera de Git (ver data/README.md)
@@ -92,5 +92,3 @@ Proyecto académico de la **Mesa 1** de la asignatura **DIGD**, con el docente *
 | Luis Alejandro Flórez Rivera |
 | Luwin Alfonso Ruiz Pinzón |
 
-## Convenciones
-Ver `docs/equipo/convenciones.md`. Son una referencia, no una camisa de fuerza.

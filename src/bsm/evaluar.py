@@ -46,6 +46,8 @@ def main():
     filas = []
     for f in preguntas.itertuples():
         r = app.chat(f.pregunta, [])
+        if isinstance(r, list):  # respuestas con gráfico: se califica el texto
+            r = "\n".join(x for x in r if isinstance(x, str))
         filas.append({"id": f.id, "tipo": f.tipo, "pregunta": f.pregunta, "respuesta": r,
                       "puntaje": calificar(f, r), "tiene_fuente": tiene_fuente(r)})
     res = pd.DataFrame(filas)

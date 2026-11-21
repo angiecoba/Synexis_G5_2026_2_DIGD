@@ -1,14 +1,3 @@
----
-title: Bogotá se Mueve
-emoji: 🚦
-colorFrom: green
-colorTo: gray
-sdk: gradio
-sdk_version: 6.32.0
-app_file: app.py
-pinned: false
----
-
 # Bogotá se Mueve
 
 Proyecto del equipo **Synexis** para el reto de datos de la Alcaldía de Bogotá (DDIPEA) sobre **confianza y apropiación de los datos públicos**.
@@ -39,13 +28,16 @@ src/bsm/
   resumen.py         indicadores comparables por estudio
   pipeline.py        orquestación + auditoría   ->  python -m bsm.pipeline
   modelo.py          modelo + rival + métricas  ->  python -m bsm.modelo
+  preparar_app.py    carpeta liviana de la app  ->  python -m bsm.preparar_app
   rag.py             enrutador, búsqueda con cita y LLM opcional
 app.py               app Gradio (Asistente · Explorar · Predecir · Calidad · Acerca de)
 tests/               reglas críticas de limpieza (pytest)
 docs/                glosario, diagnóstico y acerca de (el asistente los cita)
 docs/equipo/         convenciones, próximos pasos, diccionario de vehículos
 scripts/             descarga de siniestros del SIMUR
-data/  models/       fuera de Git (ver data/README.md)
+data/app/           datos livianos de la app (~3 MB, SÍ en Git)
+data/raw, data/processed, models/   fuera de Git (ver data/README.md)
+render.yaml         configuración del despliegue en Render
 ```
 
 ## Uso
@@ -56,6 +48,7 @@ export PYTHONPATH=src                                   # Windows: set PYTHONPAT
 
 python -m bsm.pipeline data/raw/Nodos.zip --salida data/processed   # ~1 min
 python -m bsm.modelo --datos data/processed --modelos models        # ~1 min
+python -m bsm.preparar_app                                          # actualiza data/app/
 pytest -q
 python app.py                                                       # http://127.0.0.1:7860
 ```
@@ -70,8 +63,14 @@ En Colab: `!git clone <url>`, `%cd bogota-se-mueve`, `!pip install -r requiremen
 
 El modelo gana en 663, 695 y 23692. En 3493 y 10122 gana el promedio histórico (pocos estudios), así que la app usa el promedio en esos nodos. Detalle en `models/metricas.json`.
 
-## Despliegue
-Hugging Face Space con Gradio (el encabezado de este README es su configuración). Los datos procesados y el modelo se suben como dataset/modelo en el Hub, y las claves del LLM (`LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL`) van como **Secrets** del Space. Sin LLM, el asistente responde con los fragmentos encontrados y su cita.
+## Despliegue (Render, plan gratuito)
+1. Entrar a https://render.com con la cuenta de GitHub del repositorio.
+2. **New → Blueprint** → elegir este repositorio. Render lee `render.yaml` y crea el servicio.
+3. (Opcional) En **Environment**, agregar `LLM_API_KEY`, `LLM_BASE_URL` y `LLM_MODEL` para que un LLM redacte las respuestas. Sin ellos, el asistente responde con los fragmentos encontrados y su cita.
+
+La app usa solo `data/app/` (~380 MB de memoria; el plan gratuito da 512 MB). El servicio gratuito se duerme tras 15 minutos sin visitas y tarda alrededor de un minuto en despertar: abrirlo unos minutos antes de una demo.
+
+Cada vez que se actualicen los datos: `pipeline` → `modelo` → `preparar_app`, y hacer commit de `data/app/`. Render redespliega solo al recibir el push.
 
 ## Convenciones
 Ver `docs/equipo/convenciones.md`. Son una referencia, no una camisa de fuerza.

@@ -1,0 +1,46 @@
+{
+  "corte": "2026-01-01",
+  "horas_train": 21075,
+  "horas_test": 6203,
+  "wape_modelo": 24.2,
+  "wape_rival": 28.7,
+  "mae_modelo": 101.0,
+  "mae_rival": 119.7,
+  "por_nodo": {
+    "663": {
+      "horas_test": 2196,
+      "estudios_test": 46,
+      "wape_modelo": 22.5,
+      "wape_rival": 25.0,
+      "usar": "modelo"
+    },
+    "695": {
+      "horas_test": 1859,
+      "estudios_test": 41,
+      "wape_modelo": 32.1,
+      "wape_rival": 46.3,
+      "usar": "modelo"
+    },
+    "3493": {
+      "horas_test": 120,
+      "estudios_test": 1,
+      "wape_modelo": 20.6,
+      "wape_rival": 13.8,
+      "usar": "rival"
+    },
+    "10122": {
+      "horas_test": 168,
+      "estudios_test": 2,
+      "wape_modelo": 29.6,
+      "wape_rival": 21.0,
+      "usar": "rival"
+    },
+    "23692": {
+      "horas_test": 1860,
+      "estudios_test": 41,
+      "wape_modelo": 20.5,
+      "wape_rival": 23.7,
+      "usar": "modelo"
+    }
+  }
+}

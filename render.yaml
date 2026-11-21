@@ -1,0 +1,23 @@
+# Despliegue en Render (plan gratuito). Render lee este archivo al crear el servicio
+# desde el repositorio de GitHub (New > Blueprint).
+services:
+  - type: web
+    name: bogota-se-mueve
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: GRADIO_ANALYTICS_ENABLED
+        value: "False"
+      # Opcionales: para que un LLM redacte las respuestas del asistente.
+      # Se configuran en el panel de Render (Environment), nunca en el código.
+      - key: LLM_API_KEY
+        sync: false
+      - key: LLM_BASE_URL
+        sync: false
+      - key: LLM_MODEL
+        sync: false

@@ -1,6 +1,7 @@
 # Datos: no van en Git (ver data/README.md)
 data/raw/*
 data/processed/*
+# data/app/ SÍ se versiona: es la carpeta liviana (~3 MB) que usa la app desplegada
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 # Artefactos del modelo: se publican en Hugging Face Hub

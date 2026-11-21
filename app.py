@@ -1,9 +1,10 @@
 """App Gradio de Bogotá se Mueve (base).
 
 Pestañas: Asistente · Explorar nodo · Predecir · Calidad de datos · Acerca de.
-Variables de entorno (Secrets del Space):
-  BSM_DATOS   carpeta con los datos procesados (por defecto data/processed)
-  BSM_MODELOS carpeta con modelo_volumen.joblib y metricas.json (por defecto models)
+Lee la carpeta liviana data/app/ (se genera con `python -m bsm.preparar_app`).
+Variables de entorno (en Render: Environment):
+  BSM_APP     carpeta de datos de la app (por defecto data/app)
+  PORT        puerto (Render lo define solo; por defecto 7860)
   LLM_API_KEY, LLM_BASE_URL, LLM_MODEL  (opcionales) para redactar las respuestas
 """
 import json
@@ -20,26 +21,23 @@ import plotly.express as px
 RAIZ = Path(__file__).parent
 sys.path.insert(0, str(RAIZ / "src"))
 
-from bsm.catalogo import MOTORIZADOS  # noqa: E402
-from bsm.modelo import predecir_dia, tabla_horaria  # noqa: E402
+from bsm.modelo import predecir_dia  # noqa: E402
 from bsm.rag import (ETIQUETA_NODO, Buscador, construir_corpus, detectar_nodo,  # noqa: E402
                      intencion, responder_contexto)
 
-DATOS = Path(os.getenv("BSM_DATOS", RAIZ / "data" / "processed"))
-MODELOS = Path(os.getenv("BSM_MODELOS", RAIZ / "models"))
+APP_DATOS = Path(os.getenv("BSM_APP", RAIZ / "data" / "app"))
 OPCIONES_NODO = [f"{n} · {e}" for n, e in ETIQUETA_NODO.items()]
 TIPOS_DIA = {"Día hábil": "habil", "Fin de semana": "finde", "Festivo": "festivo"}
 
 
 @lru_cache(maxsize=1)
 def cargar():
-    aforos = pd.read_parquet(DATOS / "aforos_largo.parquet")
-    horas = tabla_horaria(aforos)
-    resumen = pd.read_csv(DATOS / "estudios_resumen.csv")
-    alertas = pd.read_csv(DATOS / "alertas_calidad.csv")
-    artefacto = joblib.load(MODELOS / "modelo_volumen.joblib")
-    metricas = json.loads((MODELOS / "metricas.json").read_text())
-    buscador = Buscador(construir_corpus(DATOS, RAIZ / "docs"))
+    horas = pd.read_parquet(APP_DATOS / "horas.parquet")
+    resumen = pd.read_csv(APP_DATOS / "estudios_resumen.csv")
+    alertas = pd.read_csv(APP_DATOS / "alertas_calidad.csv")
+    artefacto = joblib.load(APP_DATOS / "modelo_volumen.joblib")
+    metricas = json.loads((APP_DATOS / "metricas.json").read_text())
+    buscador = Buscador(construir_corpus(APP_DATOS, RAIZ / "docs"))
     return horas, resumen, alertas, artefacto, metricas, buscador
 
 
@@ -169,4 +167,4 @@ with gr.Blocks(title="Bogotá se Mueve") as demo:
         gr.Markdown((RAIZ / "docs" / "acerca.md").read_text(encoding="utf-8"))
 
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch(server_name="0.0.0.0", server_port=int(os.getenv("PORT", 7860)))

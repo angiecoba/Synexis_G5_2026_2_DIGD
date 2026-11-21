@@ -21,4 +21,7 @@ Se generan con:
 | `alertas_calidad.csv` | anomalías del dato oficial |
 | `auditoria.jsonl` | qué pasó con cada archivo (OK, duplicado, corregido, descartado) |
 
-Para la app desplegada, esta carpeta se publica como dataset en Hugging Face Hub.
+## App (`data/app/`) — sí va en Git
+Versión liviana (~3 MB) con lo que necesita la app desplegada: tabla horaria agregada,
+resúmenes, alertas, notas de campo y el modelo. Se genera con `python -m bsm.preparar_app`.
+No contiene nombres de personas.

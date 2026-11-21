@@ -2,9 +2,9 @@
 
 | # | Tarea | Estado |
 |---|---|---|
-| 1 | Subir este repositorio y dar acceso a Alejandro, Alfonso, Diego y Laura | Pendiente |
-| 2 | Publicar `data/processed/` como dataset en Hugging Face (o carpeta compartida) | Pendiente |
-| 3 | Crear el Space de Gradio (ZeroGPU gratis o cuenta PRO) y configurar Secrets del LLM | Pendiente |
+| 1 | Subir este repositorio y dar acceso a Alejandro, Alfonso, Diego y Laura | Hecho (acceso pendiente) |
+| 2 | Guardar `Nodos.zip` y `data/processed/` en la carpeta compartida del equipo | Pendiente |
+| 3 | Desplegar en Render (New → Blueprint) y, si hay LLM, configurar sus variables | Pendiente |
 | 4 | Escribir 10 preguntas de prueba con su respuesta esperada | Pendiente |
 | 5 | Comparar recuperación TF-IDF vs embeddings con esas 10 preguntas | Pendiente |
 | 6 | Comparar el asistente contra el "Buscador inteligente" del portal Datos Abiertos | Pendiente |

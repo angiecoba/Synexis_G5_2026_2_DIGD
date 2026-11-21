@@ -36,8 +36,7 @@ src/bsm/
   evaluar.py         califica el asistente con evaluacion/preguntas.csv -> python -m bsm.evaluar
 app.py               app Gradio (Asistente · Explorar · Predecir · Calidad · Acerca de)
 tests/               reglas críticas de limpieza (pytest)
-docs/                glosario, diagnóstico y acerca de (el asistente los cita)
-docs/equipo/         documentos de trabajo internos del equipo
+docs/                glosario, diagnóstico y acerca de (el asistente los cita) + diccionario de vehículos
 scripts/             descarga de siniestros del SIMUR
 data/app/           datos livianos de la app (~3 MB, SÍ en Git)
 data/raw, data/processed, models/   fuera de Git (ver data/README.md)

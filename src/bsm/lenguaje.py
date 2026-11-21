@@ -91,3 +91,35 @@ EXPLICA_MEDIANA = (
 EXPLICA_RANGO = (
     "El **rango habitual** es la mitad central de los días medidos: una cuarta parte de los días "
     "tuvo menos tráfico que eso y otra cuarta parte tuvo más.")
+
+
+# ------------------------------------------------------------------ periodos de comparación
+MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre",
+         "octubre", "noviembre", "diciembre"]
+TEMPORADAS = ["Vacaciones de fin de año (dic–ene)", "Vacaciones de mitad de año (jun–jul)",
+              "Temporada escolar (feb–may y ago–nov)"]
+NOMBRE_PERIODO = {"anio": "año", "mes": "mes", "temporada": "temporada"}
+UN_PERIODO = {"anio": "un año", "mes": "un mes", "temporada": "una temporada"}
+NINGUN_PERIODO = {"anio": "ningún año", "mes": "ningún mes", "temporada": "ninguna temporada"}
+
+
+def temporada(mes: int) -> str:
+    """Temporadas que cambian el tráfico en Bogotá: vacaciones escolares y el resto del año."""
+    if mes in (12, 1):
+        return TEMPORADAS[0]
+    if mes in (6, 7):
+        return TEMPORADAS[1]
+    return TEMPORADAS[2]
+
+
+def periodo_de(fechas, por: str):
+    """Etiqueta de periodo (año, mes o temporada) para una serie de fechas, y su orden."""
+    import pandas as pd
+    f = pd.to_datetime(pd.Series(fechas))
+    if por == "anio":
+        return f.dt.year.astype(str), sorted(f.dt.year.astype(str).unique())
+    if por == "mes":
+        return f.dt.month.map(lambda m: MESES[m - 1].capitalize()), [m.capitalize() for m in MESES]
+    if por == "temporada":
+        return f.dt.month.map(temporada), TEMPORADAS
+    raise ValueError(por)

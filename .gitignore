@@ -23,3 +23,6 @@ venv/
 
 # Parches que se aplican con git apply: no se guardan en el repositorio
 *.patch
+
+# Documentos internos del equipo (viven en el Drive, no en el repositorio público)
+docs/equipo/

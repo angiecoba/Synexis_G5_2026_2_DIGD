@@ -40,3 +40,13 @@ def test_fecha_larga_y_acceso():
 
 def test_explicar_error():
     assert "entre 8.600 y 11.400" in explicar_error(13.8)
+
+
+def test_periodos():
+    from bsm.lenguaje import periodo_de, temporada, TEMPORADAS
+    assert temporada(12) == temporada(1) == TEMPORADAS[0]
+    assert temporada(7) == TEMPORADAS[1] and temporada(3) == TEMPORADAS[2]
+    et, orden = periodo_de(["2024-01-05", "2025-06-10"], "anio")
+    assert list(et) == ["2024", "2025"] and orden == ["2024", "2025"]
+    et, _ = periodo_de(["2024-01-05"], "mes")
+    assert list(et) == ["Enero"]

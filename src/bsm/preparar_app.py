@@ -32,6 +32,17 @@ def mezcla_por_hora(aforos: pd.DataFrame) -> pd.DataFrame:
     return t.drop(columns="conteo")
 
 
+def mezcla_diaria(aforos: pd.DataFrame) -> pd.DataFrame:
+    """Vehículos de cada grupo por nodo y día (para comparar la mezcla entre años, meses o temporadas)."""
+    d = aforos[(aforos.tipo_estudio == "VOL") & aforos.categoria.isin(MOTORIZADOS)
+               & ~aforos.estudio.str.contains("_v")].copy()
+    d["tipo_dia"] = tipo_dia(pd.to_datetime(d.fecha), d.festivo)
+    d["grupo"] = d.categoria.map(GRUPO_VEHICULO)
+    t = d.groupby(["nodo", "fecha", "tipo_dia", "grupo"], as_index=False).conteo.sum()
+    t["fecha"] = pd.to_datetime(t.fecha)
+    return t
+
+
 def ubicacion_nodos(aforos: pd.DataFrame) -> pd.DataFrame:
     """Coordenadas de cada nodo (mediana de las fichas de sus estudios) y días medidos."""
     d = aforos[aforos.nodo.isin(NODOS_PROYECTO) & aforos.lon.notna()]
@@ -46,6 +57,7 @@ def preparar(datos="data/processed", modelos="models", salida="data/app"):
     h = tabla_horaria(aforos)
     h.drop(columns=["festivo"]).to_parquet(salida / "horas.parquet", index=False)
     mezcla_por_hora(aforos).to_parquet(salida / "mezcla.parquet", index=False)
+    mezcla_diaria(aforos).to_parquet(salida / "mezcla_diaria.parquet", index=False)
     ubicacion_nodos(aforos).to_csv(salida / "nodos.csv", index=False)
     for f in ["estudios_resumen.csv", "alertas_calidad.csv", "observaciones_campo.csv"]:
         shutil.copy(datos / f, salida / f)

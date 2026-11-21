@@ -45,7 +45,7 @@ def main():
     preguntas = pd.read_csv(RAIZ / "evaluacion" / "preguntas.csv")
     filas = []
     for f in preguntas.itertuples():
-        r = app.chat(f.pregunta, [])
+        r = app.responder(f.pregunta, [])
         if isinstance(r, list):  # respuestas con gráfico: se califica el texto
             r = "\n".join(x for x in r if isinstance(x, str))
         filas.append({"id": f.id, "tipo": f.tipo, "pregunta": f.pregunta, "respuesta": r,

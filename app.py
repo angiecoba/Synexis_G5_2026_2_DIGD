@@ -96,6 +96,101 @@ def franja(h) -> str:
 
 
 from bsm.lenguaje import miles  # noqa: E402,F811  (formato 17.687)
+from bsm.lenguaje import NINGUN_PERIODO, NOMBRE_PERIODO, UN_PERIODO, periodo_de  # noqa: E402
+
+MIN_DIAS_PERIODO = 3   # un periodo con menos días medidos no se dibuja: sería poco confiable
+COMPARAR = {"No comparar": None, "Por año": "anio", "Por mes": "mes", "Por temporada": "temporada"}
+
+
+@lru_cache(maxsize=1)
+def cargar_mezcla_diaria():
+    return pd.read_parquet(APP_DATOS / "mezcla_diaria.parquet")
+
+
+def perfil_por_periodo(nodo, tipo, por):
+    """Tráfico normal por hora en cada periodo. Devuelve (tabla, orden, periodos descartados)."""
+    horas, *_ = cargar()
+    h = horas[(horas.nodo == nodo) & (horas.tipo_dia == tipo)]
+    dia = h.groupby(["estudio", "fecha", "hora"], as_index=False).veh.sum()
+    dia["periodo"], orden = periodo_de(dia.fecha, por)
+    dias = dia.groupby("periodo").estudio.nunique()
+    validos = dias[dias >= MIN_DIAS_PERIODO]
+    t = (dia[dia.periodo.isin(validos.index)].groupby(["periodo", "hora"], as_index=False)
+            .veh.median().rename(columns={"veh": "mediana"}))
+    t["dias"] = t.periodo.map(validos)
+    return t, [o for o in orden if o in validos.index], sorted(set(dias.index) - set(validos.index))
+
+
+def mezcla_por_periodo(nodo, tipo, por):
+    """Porcentaje de cada tipo de vehículo en cada periodo (todo el día)."""
+    m = cargar_mezcla_diaria()
+    m = m[(m.nodo == nodo) & (m.tipo_dia == tipo)].copy()
+    m["periodo"], orden = periodo_de(m.fecha, por)
+    dias = m.groupby("periodo").fecha.nunique()
+    validos = dias[dias >= MIN_DIAS_PERIODO]
+    t = m[m.periodo.isin(validos.index)].groupby(["periodo", "grupo"], as_index=False).conteo.sum()
+    t["porcentaje"] = 100 * t.conteo / t.groupby("periodo").conteo.transform("sum")
+    t["dias"] = t.periodo.map(validos)
+    return t, [o for o in orden if o in validos.index]
+
+
+def etiqueta_periodo(periodo, dias):
+    return f"{periodo} ({dias} días)"
+
+
+def figura_periodos(t, orden, titulo):
+    t = t.assign(serie=[etiqueta_periodo(p, d) for p, d in zip(t.periodo, t.dias)])
+    orden_series = [etiqueta_periodo(o, t[t.periodo == o].dias.iloc[0]) for o in orden]
+    fig = px.line(t, x="hora", y="mediana", color="serie", markers=True, title=titulo,
+                  category_orders={"serie": orden_series},
+                  labels={"mediana": "Vehículos por hora", "serie": ""})
+    fig.update_traces(hovertemplate="%{fullData.name}: %{y:,.0f} vehículos<extra></extra>")
+    fig.update_layout(hovermode="x unified", legend_title_text="")
+    return eje_horas(fig)
+
+
+def figura_mezcla_periodos(t, orden, titulo):
+    t = t.assign(serie=[etiqueta_periodo(p, d) for p, d in zip(t.periodo, t.dias)])
+    orden_series = [etiqueta_periodo(o, t[t.periodo == o].dias.iloc[0]) for o in orden]
+    fig = px.bar(t, x="serie", y="porcentaje", color="grupo", title=titulo, text_auto=".0f",
+                 category_orders={"serie": orden_series, "grupo": ORDEN_VEHICULO},
+                 color_discrete_map=COLORES_VEHICULO,
+                 labels={"serie": "", "porcentaje": "De cada 100 vehículos", "grupo": ""})
+    fig.update_traces(hovertemplate="%{fullData.name}: %{y:.0f} de cada 100<extra></extra>")
+    fig.update_layout(barmode="stack", yaxis_range=[0, 100], legend_title_text="")
+    return fig
+
+
+def texto_periodos(t, orden, descartados, por, lugar, tipo_txt):
+    """Explicación en lenguaje claro de la comparación por periodos."""
+    nombre = NOMBRE_PERIODO[por]
+    if not orden:
+        return (f"⚠️ En {lugar} ({tipo_txt}) no hay al menos {MIN_DIAS_PERIODO} días medidos en "
+                f"{NINGUN_PERIODO[por]}, así que no se puede comparar por {nombre}. Prueba con otro tipo de día u otro punto.")
+    picos = t.loc[t.groupby("periodo").mediana.idxmax()].set_index("periodo").reindex(orden)
+    alto, bajo = picos.mediana.idxmax(), picos.mediana.idxmin()
+    txt = (f"Cada línea es {UN_PERIODO[por]}: muestra cuántos vehículos pasan normalmente en cada hora "
+           f"en {lugar} ({tipo_txt}).")
+    if len(orden) > 1:
+        txt += (f" La hora pico más cargada es en **{alto}** (unos {aproximar(picos.mediana[alto])} vehículos) "
+                f"y la más liviana en **{bajo}** (unos {aproximar(picos.mediana[bajo])}).")
+    txt += (f"\n\n<small>Entre paréntesis está cuántos días se midieron en cada {nombre}: con pocos días, la "
+            "línea puede reflejar un día particular más que una tendencia.")
+    if descartados:
+        txt += (f" No se dibujan {', '.join(map(str, descartados))} porque tienen menos de "
+                f"{MIN_DIAS_PERIODO} días medidos.")
+    return txt + "</small>"
+
+
+def texto_mezcla(t, orden, por):
+    if not orden:
+        return ""
+    motos = t[t.grupo == "Motos"].set_index("periodo").porcentaje.reindex(orden).dropna()
+    txt = "**¿Cambian los tipos de vehículo?** Cada barra suma 100: de cada 100 vehículos, cuántos son de cada tipo."
+    if len(motos) > 1:
+        txt += (f" Las motos van de **{motos.min():.0f} de cada 100** en {motos.idxmin()} a "
+                f"**{motos.max():.0f} de cada 100** en {motos.idxmax()}.")
+    return txt
 
 
 def nodo_de(opcion: str) -> int:
@@ -195,11 +290,38 @@ def que_pide(pregunta: str):
     return None
 
 
+def periodo_en(pregunta: str):
+    q = normalizar(pregunta)
+    if re.search(r"por anos?\b|cada ano|entre anos|ano a ano|anual|ha cambiado|evolucion|a lo largo de los anos", q):
+        return "anio"
+    if re.search(r"por mes|\bmeses\b|mensual|cada mes", q):
+        return "mes"
+    if re.search(r"temporada|vacaciones|epoca del ano", q):
+        return "temporada"
+    return None
+
+
 def tipo_de_dia_en(pregunta: str) -> str:
     q = normalizar(pregunta)
     if re.search(r"sabado|domingo|fin de semana", q):
         return "finde"
     return "festivo" if "festivo" in q else "habil"
+
+
+def responder_periodos(pedido, nodo, tipo, por):
+    lugar, tipo_txt, nombre = ETIQUETA_NODO[nodo], NOMBRE_TIPO[tipo], NOMBRE_PERIODO[por]
+    if pedido == "vehiculos":
+        t, orden = mezcla_por_periodo(nodo, tipo, por)
+        if not orden:
+            return texto_periodos(t, orden, [], por, lugar, tipo_txt)
+        return [texto_mezcla(t, orden, por) + f"\n\n<small>{lugar} · {tipo_txt}. Entre paréntesis, los días "
+                "medidos en cada periodo.</small>",
+                gr.Plot(figura_mezcla_periodos(t, orden, f"Tipos de vehículo por {nombre} · {lugar} · {tipo_txt}"))]
+    t, orden, desc = perfil_por_periodo(nodo, tipo, por)
+    texto = texto_periodos(t, orden, desc, por, lugar, tipo_txt)
+    if not orden:
+        return texto
+    return [texto, gr.Plot(figura_periodos(t, orden, f"Tráfico por hora en cada {nombre} · {lugar} · {tipo_txt}"))]
 
 
 def pedir_punto(accion: str) -> str:
@@ -219,8 +341,12 @@ def responder_visual(pedido: str, pregunta: str):
                               "su nombre y cuántos días se midió.")
         return [texto + "\n\n<small>La ubicación sale de las fichas de los estudios de la Secretaría.</small>",
                 gr.Plot(figura_mapa(nodo))]
+    por = periodo_en(pregunta)
     if nodo is None:
-        return pedir_punto("ver la gráfica" if pedido == "grafica" else "ver los tipos de vehículo")
+        extra = f" por {NOMBRE_PERIODO[por]}" if por else ""
+        return pedir_punto(("ver la gráfica" if pedido == "grafica" else "ver los tipos de vehículo") + extra)
+    if por:
+        return responder_periodos(pedido, nodo, tipo, por)
     fig, p = figura_perfil(nodo, tipo)
     if p.empty:
         return (f"Todavía no hay días medidos de tipo «{NOMBRE_TIPO[tipo]}» en {ETIQUETA_NODO[nodo]}. "
@@ -278,7 +404,8 @@ def responder_calculo(pregunta: str) -> str:
     return texto
 
 
-def chat(pregunta, historial):
+def responder(pregunta, historial):
+    """Respuesta del asistente: texto, o [texto, gráfico]."""
     *_, buscador = cargar()
     pedido = que_pide(pregunta)
     if pedido is None and detectar_nodo(pregunta) is not None:  # respuesta a «¿De qué punto…?»
@@ -288,6 +415,11 @@ def chat(pregunta, historial):
             pedido = "grafica"
         elif "¿De qué punto quieres ver los tipos de vehículo" in ultimo:
             pedido = "vehiculos"
+        if pedido and periodo_en(pregunta) is None and periodo_en(ultimo.split("?")[0]):
+            pregunta += " " + {"anio": "por año", "mes": "por mes",
+                               "temporada": "por temporada"}[periodo_en(ultimo.split("?")[0])]
+    if pedido is None and periodo_en(pregunta) and detectar_nodo(pregunta) is not None:
+        pedido = "grafica"
     if pedido:
         return responder_visual(pedido, pregunta)
     if intencion(pregunta) == "calculo":
@@ -299,6 +431,58 @@ def chat(pregunta, historial):
     if r.startswith("No tengo ese dato"):
         return "No tengo ese dato en las fuentes disponibles.\n\n" + CAPACIDADES
     return r
+
+
+def ultimo_nodo(pregunta, historial):
+    """Nodo de la pregunta o, si no lo nombra, el último que se mencionó en la conversación."""
+    nodo = detectar_nodo(pregunta)
+    for m in reversed(historial or []):
+        if nodo is not None:
+            break
+        if isinstance(m, dict) and m.get("role") == "user" and isinstance(m.get("content"), str):
+            nodo = detectar_nodo(m["content"])
+    return nodo
+
+
+def sugerencias(pregunta, historial) -> list[str]:
+    """3 preguntas para seguir la conversación, sobre el mismo punto si ya se habló de uno."""
+    q, nodo = normalizar(pregunta), ultimo_nodo(pregunta, historial)
+    if nodo is None:
+        opciones = ["Muéstrame el mapa de los puntos",
+                    "¿A qué hora hay más tráfico en la Autopista Norte con 170?",
+                    "¿Qué tipos de vehículos pasan por la Av. 68 con 72?",
+                    "¿Los datos de aforos tienen errores?"]
+    else:
+        lugar = ETIQUETA_NODO[nodo]
+        opciones = [f"¿A qué hora hay más tráfico en {lugar}?",
+                    f"Muéstrame una gráfica de las horas de {lugar}",
+                    f"¿Cómo ha cambiado el tráfico en {lugar} por año?",
+                    f"¿Qué tipos de vehículos pasan por {lugar}?",
+                    f"¿Cambian los tipos de vehículo en {lugar} en vacaciones?",
+                    f"¿A qué hora hay más tráfico en {lugar} el sábado?",
+                    f"¿Dónde queda {lugar}?",
+                    "¿Qué es la mediana?"]
+    def clase(x):
+        pedido = que_pide(x) or ("grafica" if periodo_en(x) else None)
+        return (pedido or ("calculo" if intencion(x) == "calculo" else None), tipo_de_dia_en(x), periodo_en(x))
+    hecho = clase(pregunta)
+
+    preguntadas = {normalizar(m["content"]) for m in (historial or [])
+                   if isinstance(m, dict) and m.get("role") == "user" and isinstance(m.get("content"), str)}
+
+    def ya_respondida(o):
+        return normalizar(o) in preguntadas | {q} or (hecho[0] is not None and clase(o) == hecho)
+    return [o for o in opciones if not ya_respondida(o)][:3]
+
+
+def chat(pregunta, historial):
+    """Agrega, debajo de cada respuesta, botones con preguntas para seguir."""
+    r = responder(pregunta, historial)
+    partes = r if isinstance(r, list) else [r]
+    opciones = [{"value": o, "label": o} for o in sugerencias(pregunta, historial)]
+    mensajes = [gr.ChatMessage(content=x) for x in partes[:-1]]
+    mensajes.append(gr.ChatMessage(content=partes[-1], options=opciones))
+    return mensajes
 
 
 # ------------------------------------------------------------------ explorar / predecir
@@ -338,6 +522,23 @@ def explorar(opcion, tipo_txt):
     tabla["cobertura_tipo"] = tabla["cobertura_tipo"].map({"completa": "Sí", "parcial": "No, solo algunas horas"})
     tabla["alerta_calidad"] = tabla["alerta_calidad"].fillna("")
     return guia, fig, tabla.rename(columns=COLUMNAS_ESTUDIOS)
+
+
+def comparar(opcion, tipo_txt, comparar_txt):
+    por = COMPARAR[comparar_txt]
+    if por is None:
+        return (gr.update(value="", visible=False), gr.update(value=None, visible=False),
+                gr.update(value="", visible=False), gr.update(value=None, visible=False))
+    nodo, tipo = nodo_de(opcion), TIPOS_DIA[tipo_txt]
+    nombre, lugar = NOMBRE_PERIODO[por], ETIQUETA_NODO[nodo]
+    t, orden, desc = perfil_por_periodo(nodo, tipo, por)
+    m, orden_m = mezcla_por_periodo(nodo, tipo, por)
+    texto = texto_periodos(t, orden, desc, por, lugar, tipo_txt.lower())
+    fig = figura_periodos(t, orden, f"Tráfico por hora en cada {nombre}") if orden else None
+    fig_m = figura_mezcla_periodos(m, orden_m, f"Tipos de vehículo por {nombre}") if orden_m else None
+    return (gr.update(value=texto, visible=True), gr.update(value=fig, visible=fig is not None),
+            gr.update(value=texto_mezcla(m, orden_m, por), visible=fig_m is not None),
+            gr.update(value=fig_m, visible=fig_m is not None))
 
 
 def predecir(opcion, fecha, festivo):
@@ -465,12 +666,20 @@ with gr.Blocks(title="Bogotá se Mueve") as demo:
             t1 = gr.Radio(list(TIPOS_DIA), value="Día hábil", label="Tipo de día")
         guia1 = gr.Markdown()
         g1 = gr.Plot()
+        c1 = gr.Radio(list(COMPARAR), value="No comparar", label="Comparar por periodo",
+                      info="Mira si el tráfico cambia entre años, meses o temporadas (vacaciones y época escolar).")
+        guia_p = gr.Markdown(visible=False)
+        g_p = gr.Plot(visible=False)
+        guia_m = gr.Markdown(visible=False)
+        g_m = gr.Plot(visible=False)
         gr.Markdown("**Días medidos en este punto.** Cada fila es un día en que la Secretaría de Movilidad "
                     "contó los vehículos. Si dice «No, solo algunas horas», ese día no se contó completo y por "
                     "eso no tiene total.")
         tab1 = gr.Dataframe(wrap=True)
         for c in (n1, t1):
             c.change(explorar, [n1, t1], [guia1, g1, tab1])
+        for c in (n1, t1, c1):
+            c.change(comparar, [n1, t1, c1], [guia_p, g_p, guia_m, g_m])
         demo.load(explorar, [n1, t1], [guia1, g1, tab1])
     with gr.Tab("¿Cómo estará?"):
         gr.Markdown("Elige un punto y una fecha para ver cuánto tráfico se espera en cada hora de un día típico.")

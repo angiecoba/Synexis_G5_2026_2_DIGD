@@ -1,6 +1,6 @@
 # Acerca de Bogotá se Mueve
 
-Herramienta del equipo Synexis para el reto de datos de la Alcaldía de Bogotá sobre confianza y apropiación de los datos públicos. Toma los aforos que publica la Secretaría Distrital de Movilidad y los presenta en lenguaje claro, con la fuente de cada cifra.
+Proyecto académico para el reto de datos de la Alcaldía de Bogotá sobre confianza y apropiación de los datos públicos. Toma los aforos que publica la Secretaría Distrital de Movilidad y los presenta en lenguaje claro, con la fuente de cada cifra.
 
 ## Puntos analizados
 | Nodo | Lugar |
@@ -23,3 +23,14 @@ Para los nodos con muchos estudios (663, 695 y 23692) se usa un modelo de aprend
 - Los aforos son días puntuales, no un conteo continuo: las estimaciones describen un día típico, no el tráfico de hoy.
 - Los archivos oficiales tienen problemas de calidad documentados en la pestaña "Calidad de datos".
 - La herramienta no publica nombres de personas que aparecen en los archivos de la SDM.
+
+## Autores
+Proyecto académico de la **Mesa 1** de la asignatura **DIGD**, con el docente **Nelson Gustavo Fajardo Belmonte**, presentado en **Synexis · Tech Innovate Summit** de la Escuela Colombiana de Ingeniería Julio Garavito.
+
+Integrantes:
+
+- Angie Valentina Coba Perdomo
+- Diego Alejandro Sánchez Parra
+- Laura Ximena Cifuentes Chauta
+- Luis Alejandro Flórez Rivera
+- Luwin Alfonso Ruiz Pinzón

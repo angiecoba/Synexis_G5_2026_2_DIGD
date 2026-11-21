@@ -1,6 +1,8 @@
 # Bogotá se Mueve
 
-Proyecto del equipo **Synexis** para el reto de datos de la Alcaldía de Bogotá (DDIPEA) sobre **confianza y apropiación de los datos públicos**.
+Proyecto de la Mesa 1 de la asignatura DIGD (docente Nelson Gustavo Fajardo Belmonte) para el reto de datos de la Alcaldía de Bogotá (DDIPEA) sobre **confianza y apropiación de los datos públicos**, presentado en **Synexis · Tech Innovate Summit** (Escuela Colombiana de Ingeniería Julio Garavito).
+
+App publicada: https://bogota-se-mueve.onrender.com
 
 Toma los aforos vehiculares que publica la Secretaría Distrital de Movilidad en el Observatorio de Movilidad y:
 
@@ -77,6 +79,17 @@ Línea base (2026-11-21): **17 / 20**. Fallas: P05 (la búsqueda prioriza el nom
 La app usa solo `data/app/` (~380 MB de memoria; el plan gratuito da 512 MB). El servicio gratuito se duerme tras 15 minutos sin visitas y tarda alrededor de un minuto en despertar: abrirlo unos minutos antes de una demo.
 
 Cada vez que se actualicen los datos: `pipeline` → `modelo` → `preparar_app`, y hacer commit de `data/app/`. Render redespliega solo al recibir el push.
+
+## Autores
+Proyecto académico de la **Mesa 1** de la asignatura **DIGD**, con el docente **Nelson Gustavo Fajardo Belmonte**, presentado en **Synexis · Tech Innovate Summit** de la Escuela Colombiana de Ingeniería Julio Garavito.
+
+| Integrantes |
+|---|
+| Angie Valentina Coba Perdomo |
+| Diego Alejandro Sánchez Parra |
+| Laura Ximena Cifuentes Chauta |
+| Luis Alejandro Flórez Rivera |
+| Luwin Alfonso Ruiz Pinzón |
 
 ## Convenciones
 Ver `docs/equipo/convenciones.md`. Son una referencia, no una camisa de fuerza.

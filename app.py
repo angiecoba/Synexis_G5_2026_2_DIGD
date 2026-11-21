@@ -54,6 +54,22 @@ def cargar():
     return horas, resumen, alertas, artefacto, metricas, buscador
 
 
+HORAS_24 = [f"{h:02d}:00" for h in range(24)]
+
+
+def eje_horas(fig, titulo="Hora del día (formato 24 horas)"):
+    """Eje X con todas las horas en formato 24 h y separadores colombianos (17.933)."""
+    fig.update_xaxes(tickmode="array", tickvals=list(range(24)), ticktext=HORAS_24,
+                     tickangle=-45, title=titulo, range=[-0.5, 23.5])
+    fig.update_layout(separators=",.", hoverlabel=dict(font_size=14))
+    return fig
+
+
+def franja(h) -> str:
+    h = int(h)
+    return f"{h:02d}:00–{(h + 1) % 24:02d}:00"
+
+
 def miles(x) -> str:
     """Formato colombiano: 17.687 (punto de miles)."""
     return f"{x:,.0f}".replace(",", ".")
@@ -116,13 +132,18 @@ def explorar(opcion, tipo_txt):
                   labels={"hora": "Hora del día", "mediana": "Vehículos por hora"},
                   title=f"Perfil horario · {ETIQUETA_NODO[nodo]} · {tipo_txt} · {n_est} estudios"
                         if n_est else f"Sin estudios de tipo «{tipo_txt}» para {ETIQUETA_NODO[nodo]}")
-    fig.update_traces(hovertemplate="%{x}:00 → %{y:,.0f} vehículos")
+    fig.update_traces(customdata=[franja(h) for h in p.hora],
+                      hovertemplate="%{customdata}<br>%{y:,.0f} vehículos por hora (mediana)<extra></extra>")
+    eje_horas(fig)
     fig.add_scatter(x=p.hora, y=p.p75, mode="lines", line=dict(width=0), showlegend=False, hoverinfo="skip")
     fig.add_scatter(x=p.hora, y=p.p25, mode="lines", line=dict(width=0), fill="tonexty",
                     name="50 % central de los días", hoverinfo="skip")
     cols = ["estudio", "fecha_estudio", "dia_semana", "cobertura_tipo", "veh_motorizados_5a23",
             "hora_pico", "pct_motos", "pct_pesados", "alerta_calidad"]
-    tabla = resumen[resumen.nodo == nodo][cols].sort_values("fecha_estudio", ascending=False)
+    tabla = resumen[resumen.nodo == nodo][cols].sort_values("fecha_estudio", ascending=False).copy()
+    tabla["hora_pico"] = tabla["hora_pico"].map(lambda h: franja(h) if pd.notna(h) else "")
+    tabla["veh_motorizados_5a23"] = tabla["veh_motorizados_5a23"].map(lambda x: miles(x) if pd.notna(x) else "")
+    tabla["alerta_calidad"] = tabla["alerta_calidad"].fillna("")
     return fig, tabla.rename(columns=COLUMNAS_ESTUDIOS)
 
 
@@ -144,7 +165,10 @@ def predecir(opcion, fecha, festivo):
                  labels={"hora": "Hora", "prediccion": "Vehículos estimados"},
                  title=f"Estimación · {ETIQUETA_NODO[nodo]} · {DIAS_ES[f.dayofweek]} {f:%d-%m-%Y}"
                        + (" (festivo)" if festivo else ""))
-    fig.update_traces(hovertemplate="%{x}:00 → %{y:,.0f} vehículos")
+    fig.update_traces(customdata=[franja(h) for h in tot.hora],
+                      hovertemplate="%{customdata}<br>%{y:,.0f} vehículos estimados<extra></extra>")
+    eje_horas(fig, "Hora del día (formato 24 h; cada barra es la hora que empieza ahí)")
+    pico = tot.loc[tot.prediccion.idxmax()]
     m = metricas["por_nodo"].get(str(nodo), {})
     aviso = ""
     if es_festivo_oficial:
@@ -154,6 +178,8 @@ def predecir(opcion, fecha, festivo):
                   "usa el patrón de los otros tipos de día y puede no representar ese día. Tómala con cautela.\n\n")
     elif n_tipo < 5:
         aviso += f"⚠️ Solo hay {n_tipo} estudio(s) de tipo «{NOMBRE_TIPO[tipo]}» en este nodo: la estimación es poco robusta.\n\n"
+    aviso += (f"**Hora de más tráfico estimada: {franja(pico.hora)}**, con unos "
+              f"**{miles(pico.prediccion)} vehículos**.\n\n")
     nota = aviso + (f"Método: **{'modelo (gradient boosting)' if metodo == 'modelo' else 'promedio histórico'}**. "
             + (f"Error típico en la prueba con 2026: {str(m.get('wape_modelo' if metodo == 'modelo' else 'wape_rival')).replace('.', ',')} % "
                f"del volumen ({m.get('estudios_test')} {'estudio no visto' if m.get('estudios_test') == 1 else 'estudios no vistos'} al entrenar)." if m else
@@ -177,7 +203,11 @@ def calidad():
 # ------------------------------------------------------------------ interfaz
 with gr.Blocks(title="Bogotá se Mueve") as demo:
     gr.Markdown("# Bogotá se Mueve\nDatos de aforos del Observatorio de Movilidad de Bogotá, "
-                "explicados en lenguaje claro y con su fuente.")
+                "explicados en lenguaje claro y con su fuente.\n\n"
+                "<small>Mesa 1 · DIGD · Docente: Nelson Gustavo Fajardo Belmonte · Angie Valentina Coba Perdomo, "
+                "Diego Alejandro Sánchez Parra, Laura Ximena Cifuentes Chauta, Luis Alejandro Flórez Rivera, "
+                "Luwin Alfonso Ruiz Pinzón · Synexis · Tech Innovate Summit, Escuela Colombiana de Ingeniería "
+                "Julio Garavito</small>")
     with gr.Tab("Asistente"):
         gr.ChatInterface(chat, textbox=gr.Textbox(placeholder="Escribe tu pregunta sobre el tráfico en estos puntos…",
                                                   submit_btn=True), examples=[
@@ -199,7 +229,8 @@ with gr.Blocks(title="Bogotá se Mueve") as demo:
             f2 = gr.Textbox(value=str(pd.Timestamp.today().date()), label="Fecha (AAAA-MM-DD)")
             fe2 = gr.Checkbox(label="Es festivo (los festivos oficiales se detectan solos)")
         b2 = gr.Button("Estimar")
-        g2, nota2 = gr.Plot(), gr.Markdown()
+        nota2 = gr.Markdown()   # el aviso va ARRIBA del gráfico, para que se lea sin bajar
+        g2 = gr.Plot()
         b2.click(predecir, [n2, f2, fe2], [g2, nota2])
     with gr.Tab("Calidad de datos"):
         gr.Markdown("Anomalías encontradas en los archivos oficiales. Se documentan; no se corrigen en silencio.")

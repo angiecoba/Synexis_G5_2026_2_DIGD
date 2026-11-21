@@ -35,12 +35,12 @@ P07,calidad,¿Los datos de aforos de la Secretaría de Movilidad tienen errores?
 
 - ## Dónde están los datos de aforos
 Los aforos vehiculares de la SDM se publican en el visor de volúmenes del Observatorio de Movilidad (observatorio.movilidadbogota.gov.co), donde se descargan archivo por archivo. No aparecen como conjunto de datos en el portal Datos Abiertos Bogotá ni en el hub de datos abiertos de la SDM, y el Catálogo de Objetos de la SDM (versión 1.1, abril de 2026) no los incluye. [diagnostico_calidad.md]
+- # Acerca de Bogotá se Mueve
+
+Proyecto académico para el reto de datos de la Alcaldía de Bogotá sobre confianza y apropiación de los datos públicos. Toma los aforos que publica la Secretaría Distrital de Movilidad y los presenta en lenguaje claro, con la fuente de cada cifra. [acerca.md]
 - ## Fuentes
 - Aforos vehiculares: visor de volúmenes del Observatorio de Movilidad, Secretaría Distrital de Movilidad.
 - Festivos: calendario oficial de Colombia. [acerca.md]
-- # Acerca de Bogotá se Mueve
-
-Herramienta del equipo Synexis para el reto de datos de la Alcaldía de Bogotá sobre confianza y apropiación de los datos públicos. Toma los aforos que publica la Secretaría Distrital de Movilidad y los presenta en lenguaje claro, con la fuente de cada cifra. [acerca.md]
 - ## Limitaciones
 - Los aforos son días puntuales, no un conteo continuo: las estimaciones describen un día típico, no el tráfico de hoy.
 - Los archivos oficiales tienen problemas de calidad documentados en la pestaña ""Calidad de datos"".
